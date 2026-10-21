@@ -312,7 +312,7 @@ tr.hion td{background:color-mix(in srgb,#ffc440 18%,transparent)}
             <code>_</code><span>Liaison multiple sur un même point : <code>526 1.2_2.1</code> ferme le string 1 et débute le string 2 ; <code>181 1_186 1.1</code> continue le 181 et débute le 186 (double Pcode). Autant de liaisons que voulu.</span>
           </div>
           <p class="note">Format lu&nbsp;: <code>Matricule,Est,Nord,Élév,Description</code> où la description est <code>Pcode String.Contrôle [attributs]</code>, ex. <code>526 1.1</code>. Le fichier _modif est toujours écrit au format <code>P,N,E,Z,D</code> (Point, Nord, Est, Élév., Description), sans ligne d'en-tête, quel que soit le format lu. Il contient les descriptions corrigées, les coordonnées des points inversés et les points calculés (rectangle), insérés juste après le dernier point de leur ligne.</p>
-          <p class="note">Version 2026-10-19 · fonctionne hors ligne une fois ouverte · les fichiers restent sur l'appareil.</p>
+          <p class="note">Version v8-2026-10-20 · fonctionne hors ligne une fois ouverte · les fichiers restent sur l'appareil.</p>
           <div class="actions"><button class="btn sm" id="bJournal" type="button" disabled>Exporter le journal des corrections (.csv)</button><button class="btn sm" id="bResetLay" type="button">Rétablir les couches du gabarit</button></div>
         </div>
       </div>
@@ -324,7 +324,7 @@ tr.hion td{background:color-mix(in srgb,#ffc440 18%,transparent)}
     <h2 id="pasteTitle">Coller le contenu d'un levé</h2>
     <p class="note">Si le fichier n'est pas accessible depuis le sélecteur (pièce jointe Outlook, par exemple), ouvrez-le, copiez tout le texte, puis collez-le ici.</p>
     <div class="field"><label for="pasteName">Nom du fichier (pour le _modif)</label><input id="pasteName" class="mono" value="leve_colle.txt"></div>
-    <div class="field"><label for="pasteText">Contenu</label><textarea id="pasteText" class="mono" rows="9" placeholder="628763001,284059.099,5038954.062,31.969,9&#10;628763002,284063.042,5038961.625,34.221,526 1.1"></textarea></div>
+    <div class="field"><label for="pasteText">Contenu</label><textarea id="pasteText" class="mono" rows="9" placeholder="600101001,5000000.000,300000.000,30.000,526 1.1&#10;600101002,5000004.000,300003.000,30.100,526 1&#10;…"></textarea></div>
     <div class="actions"><button class="btn primary" id="pasteGo" type="button">Analyser</button><button class="btn" id="pasteCancel" type="button">Fermer</button></div>
   </div>
 </div>
