@@ -18,4 +18,4 @@ L'outil s'ouvre ensuite comme une application et fonctionne hors ligne au terrai
 ## Mise à jour
 Remplacer `index.html`, puis changer `VERSION` dans `sw.js` pour forcer le rafraîchissement du cache.
 
-Version : 2026-10-19
+Version : v9-2026-10-21

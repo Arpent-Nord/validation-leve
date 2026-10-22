@@ -172,6 +172,27 @@ label.btn{user-select:none}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 .sheetbox.wide{width:min(980px,100%)}
+.sheet.dock{inset:0 0 0 auto;width:420px;background:transparent;display:block;padding:0;pointer-events:none}
+.sheet.dock .sheetbox{pointer-events:auto;width:100%;height:100%;max-height:100%;border-radius:0;border-width:0 0 0 1px;box-shadow:-8px 0 24px rgba(0,0,0,.18);overflow:auto;padding:14px}
+@media (max-width:900px){.sheet.dock{inset:auto 0 0 0;width:auto;height:42vh}.sheet.dock .sheetbox{border-width:1px 0 0;border-radius:12px 12px 0 0;box-shadow:0 -8px 24px rgba(0,0,0,.2)}}
+.cmhead{display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:-14px;background:var(--panel);padding:4px 0;z-index:1}
+.cmg.cur{outline:2px solid #ffc440;outline-offset:1px}.cmg{cursor:pointer}
+.cmop{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}.cmop .field{min-width:min(280px,100%)}.cmop .note{margin:0;flex:1}
+.cmbulk{align-items:center}.cmbulk .mono{white-space:nowrap}.cmbulk label{display:flex;gap:6px;align-items:center}
+.cmlist{display:flex;flex-direction:column;gap:8px}
+.cmg{border:1px solid var(--line);border-left:4px solid var(--warn);border-radius:6px;padding:8px 10px;display:flex;flex-direction:column;gap:6px;background:var(--panel)}
+.cmg.ok{border-left-color:var(--ok)}.cmg.ign{border-left-color:var(--line);opacity:.8}
+.cmh{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}.cmh b{font:600 .95rem var(--f-mono)}.cmh .note{margin:0}
+.cmrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.cmrow select{flex:1 1 280px;min-width:0;max-width:100%}
+.cmrow label{display:flex;gap:5px;align-items:center;font-size:.84rem}
+.cmout{font:.84rem var(--f-mono);color:var(--muted)}.cmout b{color:var(--ink)}
+.cmsearch{display:flex;flex-direction:column;gap:4px}.cmsearch input{width:100%}
+.cmrow select,.cmsearch input,.cmop input{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;padding:7px 9px;font:inherit}
+.cmres{display:flex;flex-direction:column;max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:6px}
+.cmres button{all:unset;cursor:pointer;padding:6px 8px;border-bottom:1px solid var(--line);font-size:.86rem;display:flex;gap:8px}
+.cmres button:hover,.cmres button:focus-visible{background:var(--accent-soft)}.cmres button b{font-family:var(--f-mono);min-width:5.5em}
+.cmuniq summary{cursor:pointer;font-weight:600;font-size:.9rem;padding:4px 0}
+
 #repFrame{width:100%;height:min(70vh,900px);border:1px solid var(--line,#ccd);border-radius:8px;background:#fff}
 .brand{flex-direction:column;align-items:flex-start;gap:3px}.brand small{max-width:300px}
 tr.hion td{background:color-mix(in srgb,#ffc440 18%,transparent)}
@@ -211,6 +232,7 @@ tr.hion td{background:color-mix(in srgb,#ffc440 18%,transparent)}
     <span class="tsep"></span>
     <button class="toolbtn" id="tHi" type="button" aria-pressed="false" title="Corriger la hauteur d'antenne (GNSS) ou de prisme : points touchés ou plage de points"><svg viewBox="0 0 40 26" aria-hidden="true"><path d="M20 9V24" class="il"/><path d="M13 6h14M15 3.5h10" class="ia" stroke-width="2"/><path d="M31 8v13M29 10l2-2 2 2M29 19l2 2 2-2" class="ia"/><path d="M15 24h10" class="il"/></svg><span>HAUT. ANT.</span></button>
     <button class="toolbtn" id="tRenum" type="button" aria-pressed="false" title="Renuméroter les points selon le standard ArpentNord (jour julien ou date)"><svg viewBox="0 0 40 26" aria-hidden="true"><path d="M8 8h9M7 15h9M11 4l-2 15M16 4l-2 15" class="il"/><text x="20" y="17" font-size="9" font-family="monospace" fill="currentColor">001</text></svg><span>NUMÉROTER</span></button>
+    <button class="toolbtn" id="tCodes" type="button" aria-pressed="false" title="Associer les codes hors standard du levé (texte libre, autre système, fichier d'un tiers) à la liste ArpentNord"><svg viewBox="0 0 40 26" aria-hidden="true"><text x="2" y="11" font-size="8" font-family="monospace" fill="currentColor">abc</text><path d="M20 8h8m-3-3 3 3-3 3" class="ia"/><text x="14" y="23" font-size="9" font-family="monospace" font-weight="700" fill="currentColor">381</text></svg><span>CODES</span></button>
     <span class="tsep"></span>
     <button class="btn sm primary" id="tAll" type="button" hidden>Créer les points des commandes (0)</button>
   </nav>
@@ -276,6 +298,9 @@ tr.hion td{background:color-mix(in srgb,#ffc440 18%,transparent)}
             <label for="oTolC">Écart de contrôle toléré (m)</label><input type="number" id="oTolC" min="0" step="0.005" value="0.030">
           </div>
           <p class="note">Points à nom non numérique (implantation, ouverture, contrôle) : le point mesuré (<code>118150B_stkd</code>) prend le prochain matricule libre à la fin du levé et le no du monument passe en description (<code>9 118150B</code>). La coordonnée de référence (<code>118150B</code>) sert au rapport de contrôle.</p>
+          <h3>Mémoire des codes (par arpenteur)</h3>
+          <p class="note" id="cmMemNote">Les associations confirmées dans « CODES » sont retenues sur cet appareil et proposées d'office aux levés suivants du même arpenteur.</p>
+          <div class="actions"><button class="btn sm" id="cmMemExp" type="button">Exporter la mémoire (.json)</button><label class="btn sm" for="cmMemIn">Importer une mémoire…</label><input type="file" id="cmMemIn" accept=".json,application/json" hidden></div>
           <h3>DXF</h3>
           <div class="opt">
             <label for="oPrefix">Préfixe des couches</label>
@@ -312,7 +337,7 @@ tr.hion td{background:color-mix(in srgb,#ffc440 18%,transparent)}
             <code>_</code><span>Liaison multiple sur un même point : <code>526 1.2_2.1</code> ferme le string 1 et débute le string 2 ; <code>181 1_186 1.1</code> continue le 181 et débute le 186 (double Pcode). Autant de liaisons que voulu.</span>
           </div>
           <p class="note">Format lu&nbsp;: <code>Matricule,Est,Nord,Élév,Description</code> où la description est <code>Pcode String.Contrôle [attributs]</code>, ex. <code>526 1.1</code>. Le fichier _modif est toujours écrit au format <code>P,N,E,Z,D</code> (Point, Nord, Est, Élév., Description), sans ligne d'en-tête, quel que soit le format lu. Il contient les descriptions corrigées, les coordonnées des points inversés et les points calculés (rectangle), insérés juste après le dernier point de leur ligne.</p>
-          <p class="note">Version v8-2026-10-20 · fonctionne hors ligne une fois ouverte · les fichiers restent sur l'appareil.</p>
+          <p class="note">Version v9-2026-10-21 · fonctionne hors ligne une fois ouverte · les fichiers restent sur l'appareil.</p>
           <div class="actions"><button class="btn sm" id="bJournal" type="button" disabled>Exporter le journal des corrections (.csv)</button><button class="btn sm" id="bResetLay" type="button">Rétablir les couches du gabarit</button></div>
         </div>
       </div>
@@ -366,6 +391,7 @@ tr.hion td{background:color-mix(in srgb,#ffc440 18%,transparent)}
       <label><input type="radio" name="nStd" value="J" checked> <b>Jour julien</b> <span class="mono">AJJJSSNNN</span> <span class="note">10 arpenteurs et plus (ex. 629263001)</span></label>
       <label><input type="radio" name="nStd" value="D"> <b>Date</b> <span class="mono">AAMMJJNNNN</span> <span class="note">9 arpenteurs et moins (ex. 2610190001)</span></label>
     </fieldset>
+    <label class="note" id="nTiersBox" style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" id="nTiers" style="margin-top:3px"><span><b>Levé d'un tiers</b> (aucun numéro d'arpenteur) : standard Date, plage de dépassement <span class="mono">9001-9999</span> autorisée par le chef arpenteur ; les numéros d'origine restent au journal. <span id="nTiersNote"></span></span></label>
     <div class="field" id="nDateBox"><label for="nDate">Date du levé</label><input type="date" id="nDate"><span class="note" id="nJul"></span><span class="note" id="nDateNote"></span></div>
     <div class="row3" id="nJ">
       <div class="field"><label for="nSS">Arpenteur SS (01-99)</label><input id="nSS" class="mono" inputmode="numeric" maxlength="2" value="01"></div>
@@ -373,11 +399,27 @@ tr.hion td{background:color-mix(in srgb,#ffc440 18%,transparent)}
       <div class="field" id="nSubBox" hidden><label for="nSub">Chiffre pour l'année en 0</label><input id="nSub" class="mono" inputmode="numeric" maxlength="1" placeholder="ex. 5"></div>
     </div>
     <div class="row3" id="nD" hidden>
-      <div class="field"><label for="nArp">Arpenteur (1-9)</label><select id="nArp"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option></select></div>
+      <div class="field"><label for="nArp">Arpenteur (1-9)</label><select id="nArp"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option value="10">Dépassement / levé d'un tiers (9001-9999)</option></select></div>
       <div class="field"><label for="nSeq">1<sup>er</sup> point NNNN (séquence attribuée)</label><input id="nSeq" class="mono" inputmode="numeric" maxlength="4" value="0001"></div>
     </div>
     <p class="note" id="nPrev"></p>
     <div class="actions"><button class="btn primary" id="nGo" type="button">Renuméroter</button><button class="btn" id="nClose" type="button">Fermer</button></div>
+  </div>
+</div>
+<div class="sheet dock" id="cmSheet" hidden>
+  <div class="sheetbox" role="dialog" aria-labelledby="cmTitle">
+    <div class="cmhead"><h2 id="cmTitle">Codes du levé → liste ArpentNord</h2><button class="btn sm" id="cmX" type="button" aria-label="Fermer le panneau des codes">✕</button></div>
+    <p class="note">Touchez un groupe : ses points sont encerclés en jaune et cadrés sur le plan. Touchez un point du plan pour retrouver son groupe.</p>
+    <p class="note" id="cmIntro"></p>
+    <div class="cmop">
+      <div class="field"><label for="cmOp">Arpenteur (mémoire des codes)</label><input id="cmOp" list="cmOps" autocomplete="off" placeholder="Nom de l'arpenteur"><datalist id="cmOps"></datalist></div>
+      <p class="note" id="cmOpNote"></p>
+    </div>
+    <div class="actions cmbulk"><button class="btn sm" id="cmAllOk" type="button">Confirmer toutes les propositions</button><label class="note"><input type="checkbox" id="cmAttrAll" checked> Garder le texte d'origine en attribut (ex. <span class="mono">381 HT EXC</span>)</label></div>
+    <div id="cmList" class="cmlist"></div>
+    <details id="cmUniq" class="cmuniq"><summary id="cmUniqSum"></summary><div id="cmListU" class="cmlist"></div></details>
+    <p class="note">Le fichier d'origine n'est pas modifié : les nouveaux codes vont dans le <span class="mono">_modif.txt</span>. Chaque changement est journalisé et s'annule avec Annuler ou Historique.</p>
+    <div class="actions"><button class="btn primary" id="cmGo" type="button">Appliquer</button><button class="btn" id="cmClose" type="button">Fermer</button></div>
   </div>
 </div>
 <div class="sheet" id="histSheet" hidden>
@@ -461,7 +503,9 @@ function parseFile(text){
   const endsWithEol=/\r?\n$/.test(text);
   const lines=text.split(/\r?\n/);
   if(endsWithEol) lines.pop();
-  const first=lines.find(l=>l.trim())||'';
+  // lignes de commentaire « # » (en-tête PROJET / DATE / OPÉRATEUR des exports GNSS) : conservées à part
+  const isCom=l=>/^\s*#/.test(l);const comments=lines.filter(isCom);
+  const first=lines.find(l=>l.trim()&&!isCom(l))||'';
   const delim=first.includes(',')?',':(first.includes(';')?';':(first.includes('\t')?'\t':' '));
   let header=null,hmap=null;
   const f0=splitLine(first,delim);
@@ -488,7 +532,7 @@ function parseFile(text){
   const rows=[];
   lines.forEach((raw,li)=>{
     if(raw===header&&li===lines.indexOf(header)) return;
-    if(!raw.trim()) return;
+    if(!raw.trim()||isCom(raw)) return;
     const f=splitLine(raw,delim);
     let cols;
     const useH=hmap&&f.length>=hmap.len&&hmap.e!=null&&hmap.d!=null;
@@ -504,7 +548,7 @@ function parseFile(text){
     rows.push({i:rows.length,li,raw,fields:f,cols,name:(f[cols.name]||'').trim(),e,n,z:isFinite(z)?z:0,xyz,oxyz:xyz.slice(),desc:desc??'',orig:desc??'',field,meta,bad:!(isFinite(e)&&isFinite(n))});
   });
   const renamed=prepControl(rows);
-  return {eol,endsWithEol,lines,delim,header,rows,fmt:hmap&&hmap.fmt||null,hmap,renamed};
+  return {eol,endsWithEol,lines,delim,header,rows,fmt:hmap&&hmap.fmt||null,hmap,renamed,comments};
 }
 /* ===== Rapport HTML Trimble Access (« Rapport de levé ») =====
    Lu sans édition manuelle : coordonnées des « Points réduits », code et string de la « Caractéristique »,
@@ -615,13 +659,17 @@ function prepControl(rows){
   const num=rows.filter(r=>/^\d+$/.test(r.name));if(!num.length)return [];
   let max=0,w=0;for(const r of num){const v=+r.name;if(v>max){max=v;w=r.name.length}}
   const lower=new Set(rows.map(r=>r.name.toLowerCase()));const out=[];
+  const alpha=rows.filter(r=>r.name&&!/^\d+$/.test(r.name)&&!r.bad).length;
+  const many=alpha>Math.max(20,rows.length*0.3); // ex. export DWG / Revit « Pt_360 », « IPt_1284 » : noms de logiciel, pas des monuments
   for(const r of rows){
     if(!r.name||/^\d+$/.test(r.name)||r.bad)continue;
+    if(many&&!/stkd$/i.test(r.name)){const old=r.name;r.fieldName=old;r.name=String(++max).padStart(w,'0');
+      out.push({name:r.name,old,before:r.desc,after:r.desc,keep:true});continue}
     const st=/^(.*?)[_-]?stkd$/i.exec(r.name);
     if(!st&&lower.has((r.name+'_stkd').toLowerCase())){r.ctl='ref';r.mon=r.name;continue}
     const old=r.name,oldDesc=r.desc;r.fieldName=old;r.ctl=st?'stkd':'alpha';r.mon=st?st[1]:old;
     r.name=String(++max).padStart(w,'0');
-    const p=parseDesc(r.desc);r.desc=`${p.pcode||'9'} ${r.mon}`;r.orig=r.desc;
+    const p=parseDesc(r.desc);r.desc=`${p.pcode||'9'} ${r.mon.replace(/_/g,'-')}`;r.orig=r.desc;
     out.push({name:r.name,old,before:oldDesc,after:r.desc});
   }
   return out;
@@ -1069,6 +1117,167 @@ function rectFourth(A,B,C){
 }
 if(typeof module!=='undefined'&&module.exports) module.exports={parseLeicaFRT,parseTrimbleHTML,fieldCodeDesc,prepControl,parseFile,parseDesc,formatDesc,analyze,lineVerts,buildDXF,buildCodes,makeZip,toCp1252,buildModifText,crc32,swapPoints,isModified,makeRow,rectFourth,patchLinkDesc,splitCmd,calcCmd,CMD_NEED,addLinkDesc};
 
+/* ===== Codes hors standard → liste ArpentNord =====
+   Lit tous les codes d'un levé qui ne respectent pas « Pcode String.Contrôle », les regroupe
+   (casse, accents, tirets, ordre des mots, abréviations « INF » / « INFRA »), propose des codes de la liste
+   ArpentNord (numéro, abréviation APH, mots de la description) et retient les choix confirmés
+   par arpenteur (mémoire) pour les levés suivants. Le texte d'origine peut rester en attribut. */
+
+/* Vieux standard ArpentNord du nom de fichier : DATE · Emplacement (2) · Type (1) · Relevé/arpenteur (1) · Entreprise (1) */
+const OLD_STD={
+  place:{RP:'Route principale',CA:'Carrière',DP:'Aire de rejet',BP:"Banc d'emprunt",CP:'Campement',DI:'Divers'},
+  type:{A:'Divers',B:'Terrain initial',C:'Roc initial',D:'Roc excavé',E:'Remblai',F:'Décapage',G:'Terrain excavé',H:'Pile de réserve',I:'Surexcavation',J:'Infra',K:'MG-112',L:'MG-56',M:'MG-20',N:'Pavage',O:'Ponceau',P:'Glissière',Q:'Clôture',R:'Forage',S:'Station',T:'Barrière à sédiments',U:'Ancrage',V:'Boulon',W:'Membrane',X:'TQC',Y:'Empierrement',Z:'Géogrille'},
+  surveyor:{A:'David Perron',B:'David Perron',C:'David Perron',D:'Roland Savoie',E:'Roland Savoie',F:'Roland Savoie',G:'Alessandro Meccati',H:'Alessandro Meccati',I:'Alessandro Meccati',J:'Michel Dupont',K:'Michel Dupont',L:'Michel Dupont',M:'Michel Turcotte',N:'Michel Turcotte',O:'Michel Turcotte',P:'Toros Seher',Q:'Toros Seher',R:'Toros Seher',S:'Sébastien David',T:'Sébastien David',U:'Sébastien David',X:'Yanick Langevin',Y:'Yanick Langevin',Z:'Yanick Langevin'},
+  company:{E:'PNC-Dexter',H:'Vérification'}
+};
+function oldStdName(fileName){
+  const b=String(fileName||'').replace(/\.[^.]+$/,'').replace(/[\s_-].*$/,'').toUpperCase();
+  const m=/^(\d{5,6})([A-Z]{2})([A-Z])([A-Z])([A-Z])$/.exec(b);if(!m)return null;
+  return {date:m[1],place:m[2],placeName:OLD_STD.place[m[2]]||null,type:m[3],typeName:OLD_STD.type[m[3]]||null,
+    letter:m[4],surveyor:OLD_STD.surveyor[m[4]]||null,company:m[5],companyName:OLD_STD.company[m[5]]||null};
+}
+/* En-tête « #OPÉRATEUR : … », « #DATE : … », etc. (fichiers GNSS exportés avec commentaires) */
+function commentInfo(comments){
+  const o={};
+  for(const c of comments||[]){const m=/^#\s*([^:]+?)\s*:\s*(.*?)\s*$/.exec(c);if(!m||!m[2]||/^_+$/.test(m[2]))continue;
+    const k=normText(m[1]);
+    if(/^OP\S*RAT|^ARPENT|^SURVEYOR/.test(k))o.operator=m[2];else if(/^DATE/.test(k))o.date=m[2];else if(/^PROJET|^PROJECT/.test(k))o.project=m[2];
+    else if(/^TITRE/.test(k))o.title=m[2];else if(/^INSTRUMENT/.test(k))o.instrument=m[2];else if(/^PROJECTION/.test(k))o.projection=m[2];else if(/^SECTEUR/.test(k))o.sector=m[2];}
+  return o;
+}
+function surveyorOf(F,fileName){
+  const ci=(F&&F.comments&&commentInfo(F.comments))||{};
+  if(ci.operator)return {name:titleCase(ci.operator),src:'en-tête du fichier'};
+  const a=F&&F.rows&&F.rows.map(r=>r.meta&&(r.meta.Author||r.meta.Auteur)).find(Boolean);
+  if(a)return {name:titleCase(a),src:'fichier (auteur)'};
+  const os=oldStdName(fileName);
+  if(os&&os.surveyor)return {name:os.surveyor,src:`nom de fichier (vieux standard, lettre ${os.letter})`};
+  return {name:'',src:''};
+}
+function titleCase(s){return String(s||'').trim().toLowerCase().replace(/(^|[\s-])(\p{L})/gu,(m,a,b)=>a+b.toUpperCase())}
+
+/* Normalisation : majuscules, sans accents, séparateurs → espace */
+function normText(s){return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/[_\-/\\.,;:+'’"()]+/g,' ').replace(/\s+/g,' ').trim()}
+const toks=s=>normText(s).split(' ').filter(Boolean);
+const famKey=s=>toks(s).slice().sort().join(' ');
+
+/* Abréviations courantes au terrain → mots de la liste ArpentNord */
+const CODE_EXP={HT:['HAUT','SOMMET','CRETE'],BT:['BAS','PIED'],BAS:['PIED'],TOP:['HAUT','SOMMET','DESSUS'],FDX:['FOND'],FD:['FOND'],FDS:['FOND'],
+  INF:['INFRASTRUCTURE','INFRA'],INFRA:['INFRASTRUCTURE'],EXC:['EXCAVATION'],SUREXC:['SUR','EXCAVATION'],ELECT:['ELECTRIQUE','ELECTRICITE'],ELEC:['ELECTRIQUE','ELECTRICITE'],
+  BTE:['BOITE'],COL:['COLONNE'],SEM:['SEMELLE'],FIL:['FIL','FILS'],FILS:['FIL'],BRIQUES:['BRIQUE'],CLOT:['CLOTURE'],CL:['CENTRE','AXE'],ALIGN:['ALIGNEMENT','AXE'],
+  NIV:['NIVEAU'],PLC:['PLANCHER'],STR:['STRUCTURE'],INT:['INTERIEUR'],EXT:['EXTERIEUR'],BETON:['BETON'],TOLE:['TOLE','METAL'],REB:['REBORD','BORD','LIMITE'],REBORD:['BORD','LIMITE'],
+  PONC:['PONCEAU'],BORD:['BORDURE','BORD'],TROT:['TROTTOIR'],ASPH:['ASPHALTE','PAVAGE'],PAV:['PAVAGE','PAVE'],GAZON:['GAZON','PELOUSE'],ARB:['ARBRE'],ARBUS:['ARBUSTE'],
+  POT:['POTEAU'],PUI:['PUISARD'],REG:['REGARD'],BORNE:['BORNE'],HYD:['HYDRANT','BORNE','FONTAINE'],LAMP:['LAMPADAIRE'],FOSSE:['FOSSE'],TAL:['TALUS'],DEB:['DEBLAI'],REMB:['REMBLAI'],
+  MG:['MG','GRANULAIRE','FONDATION'],SOL:['SOL','TERRAIN'],TN:['TERRAIN','NATUREL'],TQC:['TEL','CONSTRUIT']};
+/* Repère, cible, station : à traiter comme vérification (700) avec le nom en attribut */
+const CTRL_RE=/^(\d{6}[A-Z]?|TARGET|CIBLE|REPERE|STATION|BM|PIEDESTAL|PILIER)$/;
+
+function codeIndex(codes){
+  if(codes._idx)return codes._idx;
+  const out=[];for(const c of codes.values())out.push({c,abr:normText(c.abr),dw:toks(c.desc),cw:toks(c.cat)});
+  codes._idx=out;return out;
+}
+/* Recherche libre (boîte « Chercher un code ») : chiffres → codes qui commencent ainsi ; mots → tous présents */
+function searchCodes(q,codes,limit){
+  const t=toks(q);if(!t.length)return [];
+  const idx=codeIndex(codes);let res;
+  if(t.length===1&&/^\d+$/.test(t[0]))res=idx.filter(x=>x.c.code.startsWith(t[0])).sort((a,b)=>(a.c.code.length-b.c.code.length)||(+a.c.code-+b.c.code));
+  else{const rank=x=>{let s=0;for(const w of t){if(x.abr===w)s+=100;else if(x.dw.includes(w))s+=60;else if(x.dw.some(d=>d.startsWith(w)))s+=40;else if(x.cw.some(d=>d.startsWith(w)))s+=5;else return -1}return s-x.dw.length};
+    res=idx.map(x=>[x,rank(x)]).filter(z=>z[1]>=0).sort((a,b)=>b[1]-a[1]).map(z=>z[0]);}
+  return res.slice(0,limit||40).map(x=>x.c);
+}
+function wordScore(v,w){
+  if(w===v)return 40;
+  if(v.length>=3&&w.startsWith(v))return 28;
+  if(w.length>=4&&v.startsWith(w))return 22;
+  if(v.length>=4&&w.length>=4&&w.slice(0,4)===v.slice(0,4))return 12;
+  return 0;
+}
+/* Propositions pour un groupe de codes : [{code, score, why}] du meilleur au moins bon */
+function suggestCodes(text,codes,mem,op){
+  const T=toks(text),key=famKey(text),out=new Map();
+  const put=(code,score,why)=>{if(!codes.has(code))return;const p=out.get(code);if(!p||p.score<score)out.set(code,{code,score,why})};
+  // 1. mémoire : cet arpenteur, puis les autres
+  if(mem&&mem.ops){
+    const m=op&&mem.ops[op]&&mem.ops[op][key];if(m)put(m.code,1000,`appris (${op}, ${m.n} fois)`);
+    for(const [o,tab] of Object.entries(mem.ops)){if(o===op)continue;const x=tab[key];if(x)put(x.code,500+Math.min(x.n,99),`appris (${o||'autre levé'})`)}
+  }
+  // 2. code numérique ou abréviation APH dans le texte
+  if(/^\d{1,4}$/.test(T[0]||'')&&codes.has(T[0]))put(T[0],95,'numéro de code');
+  const idx=codeIndex(codes);
+  // une abréviation qui est aussi un mot courant des descriptions (MUR, FIN, COL…) compte moins que le sens des mots
+  const common=t=>idx.filter(x=>x.dw.includes(t)).length>=2||['FIN','TOP','BAS','HAUT','BASE','SUR','SOL'].includes(t);
+  // 3. repère / cible / station → vérification
+  if(T.length&&T.every(t=>CTRL_RE.test(t)||/^\d+$/.test(t))&&T.some(t=>CTRL_RE.test(t)))put('700',85,'nom de repère ou cible : point de vérification');
+  if(T[0]==='OUVERTURE')put('701',88,'mot « ouverture »');
+  if(T[0]==='FERMETURE'||T[0]==='VERIFICATION')put('700',88,`mot « ${T[0].toLowerCase()} »`);
+  // 4. mots de la description (avec abréviations courantes)
+  const STOP=new Set(['PERSONNALISE','CUSTOM','DE','DU','DES','LA','LE','LES','ET','EN','POUR','QT']);
+  const W=T.filter(t=>!STOP.has(t)&&(t.length>=2||/^\d+$/.test(t)));
+  const nW=W.filter(t=>!/^\d+$/.test(t)).length||1; // un chiffre non retrouvé (« 1-INT-MUR ») ne pénalise pas
+  if(W.length)for(const x of idx){
+    let s=0,hit=0,abr=false,abrC=false;const why=[];
+    for(const t of W){let b=0,bw='';
+      if(/^\d+$/.test(t)){if(x.dw.includes(t)){b=40;bw=t}}
+      else{if(x.abr===t){abrC=common(t);b=abrC?35:60;bw='abrév. '+x.c.abr;abr=true}
+        const V=[t].concat(CODE_EXP[t]||[]);
+        for(const v of V){for(const w of x.dw){const k=wordScore(v,w);if(k>b){b=k;bw=w.toLowerCase()}}for(const w of x.cw){const k=wordScore(v,w)/2;if(k>b){b=k;bw=w.toLowerCase()}}}}
+      if(b>0){hit++;s+=b;why.push(bw)}}
+    if(!hit)continue;
+    const hn=Math.min(hit,nW);
+    const score=Math.round(s/nW*(0.5+0.5*hn/nW)-Math.min(4,Math.max(0,x.dw.length-nW))+(abr&&!abrC&&nW===1?30:0));
+    if(score>=10)put(x.c.code,Math.min(score,90),[...new Set(why)].join(', '));
+  }
+  return [...out.values()].sort((a,b)=>b.score-a.score).slice(0,8);
+}
+
+/* Le code d'une description est-il au standard ? (sinon : texte à associer) */
+function nonStdText(r,codes){
+  if(r.bad||r.ctl==='ref'||r.added||r.calc)return null;
+  const d=(r.desc||'').trim();if(!d)return null;
+  const p=parseDesc(d);
+  if(p.err==='Pcode non numérique')return d;
+  if(!p.err&&p.pcode&&!codes.has(p.pcode)&&!p.links.length&&p.attrs.length)return d; // ex. « 9999 TEXTE »
+  return null;
+}
+/* Regroupe les codes hors standard du levé */
+function groupCodes(rows,codes){
+  const by=new Map();
+  for(const r of rows){const t=nonStdText(r,codes);if(t==null)continue;const k=famKey(t);
+    if(!by.has(k))by.set(k,{key:k,keys:[k],variants:new Map(),rows:[]});
+    const g=by.get(k);g.rows.push(r.i);g.variants.set(t,(g.variants.get(t)||0)+1);}
+  // variantes d'abréviation : mêmes mots, l'un préfixe de l'autre (TOP INF / TOP INFRA)
+  const G=[...by.values()].sort((a,b)=>b.rows.length-a.rows.length);
+  const pre=(a,b)=>{if(a===b)return true;const [s,l]=a.length<b.length?[a,b]:[b,a];return s.length>=3&&!/\d/.test(s+l)&&l.startsWith(s)};
+  const same=(ka,kb)=>{const A=ka.split(' '),B=kb.split(' ');if(A.length!==B.length||ka===kb)return false;
+    const used=new Set();return A.every(a=>{const j=B.findIndex((b,q)=>!used.has(q)&&pre(a,b));if(j<0)return false;used.add(j);return true})};
+  for(let a=0;a<G.length;a++)for(let b=a+1;b<G.length;b++){if(!G[b]||!G[a])continue;
+    if(same(G[a].key,G[b].key)){const x=G[a],y=G[b];y.rows.forEach(i=>x.rows.push(i));for(const [t,n] of y.variants)x.variants.set(t,(x.variants.get(t)||0)+n);x.keys.push(...y.keys);G[b]=null;}}
+  return G.filter(Boolean).map(g=>{g.rows.sort((p,q)=>p-q);g.n=g.rows.length;
+    g.label=[...g.variants.entries()].sort((p,q)=>q[1]-p[1])[0][0];return g});
+}
+/* Nouvelle description : « code [texte d'origine] » (le « _ » réservé aux liaisons devient « - ») */
+function mappedDesc(code,orig,keepAttr){
+  const a=keepAttr?String(orig||'').trim().replace(/_/g,'-').replace(/\s+/g,' '):'';
+  return a?code+' '+a:String(code);
+}
+/* Mémoire : { v:1, ops:{ "Roland Savoie": { "EXC HT": {code, attr, n, t} } } } */
+function memLearn(mem,op,keys,code,attr,date){
+  mem=mem&&mem.ops?mem:{v:1,ops:{}};const o=op||'';
+  const tab=mem.ops[o]||(mem.ops[o]={});
+  for(const k of keys){const p=tab[k];tab[k]={code:String(code),attr:!!attr,n:(p&&p.code===String(code)?p.n:0)+1,t:date||''}}
+  return mem;
+}
+function memMerge(a,b){
+  a=a&&a.ops?a:{v:1,ops:{}};if(!b||!b.ops)return a;let n=0;
+  for(const [o,tab] of Object.entries(b.ops)){const t=a.ops[o]||(a.ops[o]={});
+    for(const [k,x] of Object.entries(tab)){if(!x||!x.code)continue;const p=t[k];if(!p||(x.t||'')>=(p.t||'')){t[k]=x;n++}}}
+  a._merged=n;return a;
+}
+function memCount(mem,op){if(!mem||!mem.ops)return 0;if(op!=null)return Object.keys(mem.ops[op]||{}).length;return Object.values(mem.ops).reduce((s,t)=>s+Object.keys(t).length,0)}
+
+if(typeof module!=='undefined'&&module.exports)Object.assign(module.exports,{OLD_STD,oldStdName,commentInfo,surveyorOf,normText,famKey,suggestCodes,searchCodes,groupCodes,nonStdText,mappedDesc,memLearn,memMerge,memCount});
+
 /* ===== Interface ===== */
 const CODES=buildCodes(DICT);
 const $=id=>document.getElementById(id);
@@ -1097,16 +1306,17 @@ function load(text,name){
   const ok=F.rows.filter(r=>!r.bad).length;
   if(!ok){toast(`${name} ne ressemble pas à un levé : attendu Matricule,Est,Nord,Élév,Description.`);return false}
   S.tool=null;if($('toolbar'))toolRender();
-  S.F=F;S.rows=F.rows;S.fileName=name;S.enc=S.nextEnc||'windows-1252';S.nextEnc=null;S.hist=[];S.sel=null;S.cur=-1;S.journal=[];
+  S.F=F;S.rows=F.rows;S.fileName=name;S.cm=null;S.hl=null;$('cmSheet').hidden=true;S.enc=S.nextEnc||'windows-1252';S.nextEnc=null;S.hist=[];S.sel=null;S.cur=-1;S.journal=[];
   const tNow=new Date().toLocaleString('fr-CA');
   for(const x of (F.leica&&F.leica.notes)||[]) S.journal.push({name:x.name,before:'',after:'',why:x.why,t:tNow});
-  for(const x of F.renamed||[]) S.journal.push({name:x.name,before:`${x.old} · ${x.before}`,after:x.after,why:`Point d'implantation / contrôle ${x.old} renuméroté ${x.name} (nom non numérique refusé par Civil 3D) ; no du monument en description`,t:tNow});
+  for(const x of F.renamed||[]) S.journal.push({name:x.name,before:`${x.old} · ${x.before}`,after:x.after,why:x.keep?`Nom non numérique ${x.old} (fichier d'un logiciel ou d'un tiers) renuméroté ${x.name} pour Civil 3D ; description conservée`:`Point d'implantation / contrôle ${x.old} renuméroté ${x.name} (nom non numérique refusé par Civil 3D) ; no du monument en description`,t:tNow});
   $('fname').textContent=name+' · '+F.rows.length+' points';
   $('nameList').innerHTML=F.rows.map(r=>`<option value="${esc(r.name)}">`).join('');
   run();fit();
   ['bTxt','bDxf','bJournal','bMail','bRep'].forEach(id=>$(id).disabled=false);
   const nRen=(F.renamed||[]).length;
-  toast(`${name} chargé${F.fmt?' (format '+F.fmt+')':''} : ${F.rows.length} points${nRen?` · ${nRen} point(s) d'implantation renuméroté(s)`:''}.`);
+  toast(`${name} chargé${F.fmt?' (format '+F.fmt+')':''} : ${F.rows.length} points${nRen?` · ${nRen} point(s) à nom non numérique renuméroté(s)`:''}.`);
+  if(S.issues.some(i=>i.kind==='codemap'))setTimeout(()=>cmOpen(true),0);
   return true;
 }
 function decodeBytes(buf){const u8=new Uint8Array(buf);S.nextEnc='windows-1252';if(u8.length>=3&&u8[0]===0xEF&&u8[1]===0xBB&&u8[2]===0xBF)S.nextEnc='utf-8';else if(!u8.some(c=>c>127))S.nextEnc='windows-1252';else{try{new TextDecoder('utf-8',{fatal:true}).decode(u8);S.nextEnc='utf-8'}catch(e){}}
@@ -1168,7 +1378,9 @@ function run(){
   {const g=new Map();for(const r of S.rows){if(!r.field||r.added)continue;const p=parseDesc(r.desc);if(!p.pcodeOnly||!p.links.length)continue;const l=p.links[0];if(l.pcode===p.pcode)continue;
       const k=p.pcode+'>'+l.pcode+'|'+l.str;if(!g.has(k))g.set(k,{fp:p.pcode,lp:l.pcode,str:l.str,rows:[]});g.get(k).rows.push(r.i);}
     for(const x of g.values()){const n=x.rows.length;S.issues.push({sev:'info',row:x.rows[0],kind:'codemix',mix:x,msg:`Code ${x.fp} (champ Code) mais liaison de la ligne ${x.lp} / ${x.str} (description) sur ${n} point${n>1?'s':''} (${x.rows.map(i=>S.rows[i].name.slice(-3)).join(', ')}) : code resté du point précédent ?`});}}
-  {const rk={err:0,warn:1,info:2};S.issues.sort((a,b)=>rk[a.sev]-rk[b.sev]||(b.kind==='cmd')-(a.kind==='cmd')||a.row-b.row);}
+  {const G=groupCodes(S.rows,CODES);if(G.length){const n=G.reduce((s,g)=>s+g.n,0);
+    S.issues.push({sev:'err',row:Math.min(...G.map(g=>g.rows[0])),kind:'codemap',msg:`${n} point${n>1?'s':''} avec un code hors standard, en ${G.length} groupe${G.length>1?'s':''} (${G.slice(0,4).map(g=>'« '+g.label+' »').join(', ')}${G.length>4?'…':''}) : à associer aux codes ArpentNord.`});}}
+  {const rk={err:0,warn:1,info:2};S.issues.sort((a,b)=>rk[a.sev]-rk[b.sev]||(b.kind==='codemap')-(a.kind==='codemap')||(b.kind==='cmd')-(a.kind==='cmd')||a.row-b.row);}
   if($('tAll')){$('tAll').hidden=!S.cmds.length;$('tAll').textContent=`Créer les points des commandes (${S.cmds.length})`;}
   histStamp();
   S.lineOf=new Map();for(const L of S.lines)for(const i of L.pts)S.lineOf.set(i,L);
@@ -1490,6 +1702,7 @@ function fixesFor(is){
       S.hist.push({type:'snap',items,label:'cercle'});S.journal.push({name:Ls.map(L=>S.rows[L.pts[0]].name).join(', '),before:'',after:'.1.6',why:`Dessiné en cercle (.6) : ${Ls.map(L=>L.pcode+' / '+L.str).join(', ')}`,t:new Date().toLocaleString('fr-CA')});run();toast(`${Ls.length} cercle(s) dessiné(s).`)};
     out.push({label:'Dessiner en cercle',fn:mk([is.line])});if(is.all.length>1)out.push({label:`Tous les éléments circulaires (${is.all.length})`,fn:mk(is.all)});}
   if(is.kind==='numstd') out.push({label:'Standardiser la numérotation…',fn:numOpen});
+  if(is.kind==='codemap'||(is.kind==='fmt'&&/^Pcode non numérique/.test(is.msg))) out.push({label:'Associer les codes du levé…',open:true,fn:()=>cmOpen(false)});
   if(is.kind==='spaces') out.push({label:'Nettoyer les espaces',fn:()=>setDesc(is.row,r.desc.trim().replace(/\s+/g,' '),'Espaces nettoyés')});
   if(is.kind==='unknown'){
     const pc=is.pcode||parseDesc(r.desc).pcode;const cands=[];
@@ -1522,7 +1735,7 @@ function renderIssues(){
     d.innerHTML=`<div class="hd"><span class="pt">${esc(r.name)} · <span style="color:var(--muted)">${esc(r.desc.trim()||'∅')}</span></span><span class="pill ${is.kind==='cmd'?'ok':is.sev}">${is.kind==='cmd'?'Commande':SEV[is.sev]}</span></div><div class="msg">${esc(is.msg)}</div>`;
     const fx=fixesFor(is);
     if(fx.length){const a=document.createElement('div');a.className='actions';
-      fx.forEach(f=>{const b=document.createElement('button');b.type='button';b.className='fix';b.textContent=f.label;if(f.title)b.title=f.title;b.onclick=e=>{e.stopPropagation();f.fn();toast('Correction appliquée : '+f.label)};a.appendChild(b)});d.appendChild(a);}
+      fx.forEach(f=>{const b=document.createElement('button');b.type='button';b.className='fix';b.textContent=f.label;if(f.title)b.title=f.title;b.onclick=e=>{e.stopPropagation();f.fn();if(!f.open)toast('Correction appliquée : '+f.label)};a.appendChild(b)});d.appendChild(a);}
     d.onclick=()=>{S.cur=k;select(is.row,true)};
     d.onkeydown=e=>{if(e.key==='Enter')d.click()};
     el.appendChild(d);
@@ -1689,6 +1902,7 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
 function select(i,zoom){
   if(S.swapPick!=null&&S.swapPick!==i)S.swapPick=null;
   S.sel=i;renderInsp();renderIssues();renderPts();
+  if(S.cm&&!$('cmSheet').hidden){const c=[...S.cm.ch.values()].find(c=>c.g.rows.includes(i));if(c&&S.cm.focus!==c.g.key){cmFocus(c,false);cmRender();cmScroll(c)}}
   if(zoom&&S.view){const r=S.rows[i];const L=S.lineOf.get(i);
     if(L&&L.pts.length>1){let x0=1e99,y0=1e99,x1=-1e99,y1=-1e99;for(const j of L.pts){const q=S.rows[j];x0=Math.min(x0,q.e);x1=Math.max(x1,q.e);y0=Math.min(y0,q.n);y1=Math.max(y1,q.n)}
       fitBox(x0,y0,x1,y1,8)}
@@ -1955,6 +2169,8 @@ function draw(){
   else if(S.tool&&S.tool.picks.length){ctx.font='700 12px Barlow, sans-serif';S.tool.picks.forEach((pi,n)=>{const r=S.rows[pi];const [x,y]=W2S(r.e,r.n);ctx.fillStyle='#ffc440';ctx.beginPath();ctx.arc(x,y,11,0,7);ctx.fill();ctx.fillStyle='#14191d';ctx.textAlign='center';ctx.fillText(String(n+1),x,y+4);ctx.textAlign='left';});
     if(S.tool.kind==='swap'&&S.tool.picks.length===2){const [p1,p2]=S.tool.picks.map(pi=>W2S(S.rows[pi].e,S.rows[pi].n));ctx.save();ctx.setLineDash([4,4]);ctx.strokeStyle='#ffc440';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(...p1);ctx.lineTo(...p2);ctx.stroke();ctx.restore();}}
   if(S.swapPick!=null){ctx.fillStyle='#3cc4b8';ctx.font='600 13px Barlow, sans-serif';ctx.fillText('Inversion : cliquez le point à échanger avec '+S.rows[S.swapPick].name+' (Échap pour annuler)',12,S.H-40);}
+  if(S.hl&&S.hl.size){ctx.save();ctx.strokeStyle='#ffc440';ctx.fillStyle='#ffc440';ctx.lineWidth=2.2;ctx.font='600 11px "JetBrains Mono", monospace';
+    for(const i of S.hl){const r=S.rows[i];if(!r||r.bad)continue;const [x,y]=W2S(r.e,r.n);ctx.beginPath();ctx.arc(x,y,11,0,7);ctx.stroke();if(!lab||!S.showNum)ctx.fillText(r.name.length>6?r.name.slice(-3):r.name,x+12,y-8);}ctx.restore();}
   if(S.sel!=null){const r=S.rows[S.sel];const [x,y]=W2S(r.e,r.n);ctx.strokeStyle='#3cc4b8';ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(x,y,14,0,7);ctx.stroke();}
   // échelle
   const sb=niceStep(110);const px=sb*S.view.k;ctx.strokeStyle='#dfe7ea';ctx.fillStyle='#dfe7ea';ctx.lineWidth=2;
@@ -2205,10 +2421,14 @@ function checkNumbering(){
   const rows=S.rows.filter(numEligible);if(!rows.length)return;
   const st=rows.map(r=>({r,s:stdOf(r.name)}));const bad=st.filter(x=>!x.s);const cnt={J:0,D:0};st.forEach(x=>{if(x.s)cnt[x.s.std]++});
   const fix={kind:'numstd'};
-  if(bad.length>rows.length/2){S.issues.push(Object.assign({sev:'err',row:bad[0].r.i,msg:`Numérotation hors standard ArpentNord : ${bad.length} point(s) (ex. ${bad.slice(0,3).map(x=>x.r.name).join(', ')}) ne suivent ni AJJJSSNNN (jour julien) ni AAMMJJNNNN (date). Le standard est obligatoire : renumérotez.`},fix));return}
+  if(bad.length>rows.length/2){S.issues.push(Object.assign({sev:'err',row:bad[0].r.i,msg:`Numérotation hors standard ArpentNord : ${bad.length} point(s) (ex. ${bad.slice(0,3).map(x=>x.r.name).join(', ')}) ne suivent ni AJJJSSNNN (jour julien) ni AAMMJJNNNN (date). Le standard est obligatoire : renumérotez.${bad.every(x=>/^\d{1,5}$/.test(x.r.name))?' Levé d\'un tiers ? NUMÉROTER le place dans la plage de dépassement 9001-9999 (ex. 1500 → AAMMJJ9001).':''}`},fix));return}
   const main=cnt.J>=cnt.D?'J':'D';
   for(const x of bad)S.issues.push(Object.assign({sev:'err',row:x.r.i,msg:`Matricule ${x.r.name} hors standard ArpentNord (${main==='J'?'AJJJSSNNN':'AAMMJJNNNN'}).`},fix));
   for(const x of st)if(x.s&&x.s.std!==main)S.issues.push(Object.assign({sev:'err',row:x.r.i,msg:`Matricule ${x.r.name} au standard ${x.s.std==='J'?'jour julien':'date'} alors que le levé suit le standard ${main==='J'?'jour julien':'date'}.`},fix));
+  for(const x of st){if(!x.s||x.s.std!=='D')continue;const ka=arpOfSeq(x.s.n);
+    if(!ka)S.issues.push(Object.assign({sev:'err',row:x.r.i,msg:`Matricule ${x.r.name} : séquence ${pad(x.s.n,4)} hors des plages d'arpenteur (x001 à x999).`},fix));}
+  {const ov=st.filter(x=>x.s&&x.s.std==='D'&&arpOfSeq(x.s.n)===10);if(ov.length)S.issues.push({sev:'info',row:ov[0].r.i,kind:'numov',msg:`${ov.length} point(s) dans la plage de dépassement 9001-9999 (autorisée par le chef arpenteur, ex. levé d'un tiers).`});}
+  for(const r of rows)if(/^\d+$/.test(r.name)&&+r.name>C3D_MAX)S.issues.push(Object.assign({sev:'err',row:r.i,msg:`Matricule ${r.name} au-delà de la limite Civil 3D (4 294 967 295).`},fix));
   // date du levé (fichier complet) : le numéro doit porter le jour du point
   for(const x of st){if(!x.s||x.s.std!==main)continue;const d=ymd(rowDate(x.r));if(!d)continue;
     const okD=main==='J'?(x.s.j===doy(d)&&(x.s.a===d.getUTCFullYear()%10||d.getUTCFullYear()%10===0)):(x.s.date.getTime()===d.getTime());
@@ -2223,24 +2443,38 @@ function numOpen(){if(!S.rows.length){toast('Ouvrez d\'abord un levé.');return}
   const std=LS.get('vl.std',j?'J':d?'D':'J');document.querySelector(`input[name=nStd][value=${std}]`).checked=true;
   $('nSS').value=j?pad(j.ss,2):LS.get('vl.ss','01');$('nNNN').value='001';
   $('nArp').value=LS.get('vl.arp','1');$('nSeq').value=pad(d?d.n-((d.n-1)%1000):arpStart(+$('nArp').value),4);
+  const on=S.rows.filter(numEligible).map(numOrig).filter(o=>/^\d+$/.test(o)).map(Number);
+  const tiers=on.length>0&&on.every(n=>n<=99999)&&!S.rows.filter(numEligible).some(r=>stdOf(r.name));
+  $('nTiers').checked=tiers;if(tiers){document.querySelector('input[name=nStd][value=D]').checked=true;$('nArp').value='10';$('nSeq').value='9001'}$('nTiersNote').textContent=on.length?`Numéros d'origine : ${Math.min(...on)} à ${Math.max(...on)}.`:'';
   $('numSheet').hidden=false;numPrev()}
+const numOrig=r=>String(r.origName??r.fieldName??r.name);
 const arpStart=k=>k===1?1:(k-1)*1000+1;
+const arpEnd=k=>arpStart(k)+998; // 999 points par arpenteur et par jour (x001 à x999)
+const arpOfSeq=n=>n%1000===0?null:Math.floor(n/1000)+1; // 10 = plage de dépassement 9001-9999
+const C3D_MAX=4294967295; // numéro de point Civil 3D : entier non signé 32 bits (1 à 2^32 − 1)
 function numPlan(){
   const std=document.querySelector('input[name=nStd]:checked').value;
   $('nJ').hidden=std!=='J';$('nD').hidden=std!=='D';
   const rows=S.rows.filter(numEligible).map((r,k)=>({r,k})).sort((a,b)=>{const x=/^\d+$/.test(a.r.name)?+a.r.name:Infinity,y=/^\d+$/.test(b.r.name)?+b.r.name:Infinity;return x-y||a.k-b.k}).map(x=>x.r);
   const dflt=$('nDate').value;let lastD=dflt;const dOf=new Map();
   for(const r of S.rows){const d=rowDate(r);if(d)lastD=d;dOf.set(r,($('nDate').disabled?(d||lastD):dflt))}
-  const seq=new Map();const map=[];const err=[];
+  const seq=new Map();const map=[];const err=[];const tiers=$('nTiers').checked;
+  let tmax=0;if(tiers)for(const r of rows){const o=numOrig(r);if(/^\d+$/.test(o))tmax=Math.max(tmax,+o)}
   const D0=ymd(dflt);$('nSubBox').hidden=!(std==='J'&&D0&&D0.getUTCFullYear()%10===0);
   for(const r of rows){const ds=dOf.get(r)||dflt;const D=ymd(ds);if(!D){err.push('Date du levé invalide.');break}
     const k=seq.get(ds)||0;seq.set(ds,k+1);let nm;
+    // levé d'un tiers : le numéro d'origine devient la séquence (un nom non numérique prend la suite)
+    const tn=null;
     if(std==='J'){let a=D.getUTCFullYear()%10;if(a===0){a=+$('nSub').value;if(!(a>=1&&a<=9)){err.push('Année en 0 : inscrivez le chiffre de substitution (année avant le début du contrat).');break}}
       const ss=+$('nSS').value,n0=+$('nNNN').value||1;if(!(ss>=1&&ss<=99)){err.push('Numéro d\'arpenteur SS entre 01 et 99.');break}
+      if(tiers){err.push('Levé d\'un tiers : le standard jour julien n\'a pas encore de numéro d\'arpenteur (SS) pour un tiers. Prenez le standard Date (plage 9001-9999).');break}
       const n=n0+k;if(n>999){err.push(`Plus de 999 points le ${ds} : séquence NNN dépassée.`);break}
       nm=`${a}${pad(doy(D),3)}${pad(ss,2)}${pad(n,3)}`;}
-    else{const n0=+$('nSeq').value||1,n=n0+k;if(n>9999){err.push(`Séquence NNNN dépassée le ${ds}.`);break}
-      nm=`${pad(D.getUTCFullYear()%100,2)}${pad(D.getUTCMonth()+1,2)}${pad(D.getUTCDate(),2)}${pad(n,4)}`;}
+    else{const n0=+$('nSeq').value||1,n=n0+k,ka=arpOfSeq(n0);
+      if(!ka){err.push(`Séquence ${pad(n0,4)} : elle doit commencer dans une plage d'arpenteur (x001 à x999).`);break}
+      if(n>arpEnd(ka)){err.push(`Plus de ${arpEnd(ka)-n0+1} points le ${ds} : la plage ${ka===10?'de dépassement 9001-9999':`de l'arpenteur ${ka} (${pad(arpStart(ka),4)}-${pad(arpEnd(ka),4)})`} est pleine. ${ka===10?'Scindez le levé par jour.':'Le chef arpenteur peut autoriser la plage 9001-9999.'}`);break}
+      nm=`${pad(D.getUTCFullYear()%100,2)}${pad(D.getUTCMonth()+1,2)}${pad(D.getUTCDate(),2)}${pad(n,4)}`;
+      if(+nm>C3D_MAX){err.push(`Numéro ${nm} au-delà de la limite Civil 3D (4 294 967 295) : le standard Date ne fonctionne que jusqu'au 31 décembre 2042.`);break}}
     map.push([r,nm]);}
   const others=new Set(S.rows.filter(r=>!numEligible(r)).map(r=>r.name));
   if(!err.length){const seen=new Set();for(const [r,nm] of map){if(others.has(nm)||seen.has(nm)){err.push(`Numéro ${nm} en double.`);break}seen.add(nm)}}
@@ -2256,13 +2490,15 @@ function numApply(){const P=numPlan();if(P.err.length)return;const items=P.map.f
   for(const [r,nm] of P.map){if(r.origName==null&&r.name!==nm)r.origName=r.fieldName||r.name;r.name=nm;}
   S.renumLog=S.renumLog||[];const now=new Date().toLocaleString('fr-CA');const renEnt={std:P.std,map:tmp,t:now};
   S.hist.push({type:'rename',items,renEnt});S.renumLog.push(renEnt);
-  LS.set('vl.std',P.std);if(P.std==='J')LS.set('vl.ss',$('nSS').value);else LS.set('vl.arp',$('nArp').value);
-  S.journal.push({name:`${tmp.length} points`,before:`${tmp[0][0]} …`,after:`${tmp[0][1]} …`,why:`Renumérotation au standard ArpentNord ${P.std==='J'?'jour julien AJJJSSNNN':'date AAMMJJNNNN'}`,t:now});
+  LS.set('vl.std',P.std);if(P.std==='J')LS.set('vl.ss',$('nSS').value);else if($('nArp').value!=='10')LS.set('vl.arp',$('nArp').value);
+  if($('nTiers').checked)for(const [a,b2] of tmp)S.journal.push({name:b2,before:a,after:b2,why:'Levé d\'un tiers : numéro d\'origine '+a+' renuméroté dans la plage de dépassement 9001-9999',t:now});
+  S.journal.push({name:`${tmp.length} points`,before:`${tmp[0][0]} …`,after:`${tmp[0][1]} …`,why:`Renumérotation au standard ArpentNord ${P.std==='J'?'jour julien AJJJSSNNN':'date AAMMJJNNNN'}${$('nTiers').checked?' (levé d\'un tiers : numéros d\'origine gardés comme séquence)':''}`,t:now});
   $('numSheet').hidden=true;run();toast(`${tmp.length} point(s) renuméroté(s) au standard ${P.std==='J'?'jour julien':'date'}.`)}
 $('tRenum').onclick=numOpen;$('nClose').onclick=()=>{$('numSheet').hidden=true};$('nGo').onclick=numApply;
 document.querySelectorAll('input[name=nStd]').forEach(x=>x.onchange=numPrev);
 ['nDate','nSS','nNNN','nSeq','nSub'].forEach(id=>$(id).oninput=numPrev);
-$('nArp').onchange=()=>{$('nSeq').value=pad(arpStart(+$('nArp').value),4);numPrev()};
+$('nTiers').onchange=()=>{if($('nTiers').checked){document.querySelector('input[name=nStd][value=D]').checked=true;$('nArp').value='10';$('nSeq').value='9001'}else if($('nArp').value==='10'){$('nArp').value=LS.get('vl.arp','1');$('nSeq').value=pad(arpStart(+$('nArp').value),4)}numPrev()};
+$('nArp').onchange=()=>{$('nSeq').value=pad(arpStart(+$('nArp').value),4);$('nTiers').checked=$('nArp').value==='10';numPrev()};
 
 $('bHist').onclick=()=>{$('histSheet').hidden=false;histRender()};$('histClose').onclick=()=>{$('histSheet').hidden=true};
 $('histList').onclick=e=>{const b=e.target.closest('button[data-k]');if(b)undoSelect(+b.dataset.k)};
@@ -2341,6 +2577,132 @@ $('bgFiles').onchange=async e=>{const fs=[...e.target.files];e.target.value='';c
   const miss=BG.orthos.filter(o=>!o.hit).length;
   toast(`${n} ortho(s) ouverte(s)${miss?` · ${miss} hors de l'étendue du levé (coordonnées ou zone différentes ?)`:''}${errs.length?' · '+errs.join(' ; '):''}`)};
 bgSync();
+
+/* ---------- Codes hors standard → liste ArpentNord (bouton CODES) ----------
+   Regroupe les codes du levé qui ne suivent pas « Pcode String.Contrôle », propose des codes de la liste,
+   demande une confirmation par groupe et retient les choix par arpenteur (mémoire locale, exportable). */
+let codeMem=LS.get('vl.codeMem',{v:1,ops:{}});
+const cmSaveMem=()=>{LS.set('vl.codeMem',codeMem);cmMemNote()};
+function cmMemNote(){const n=memCount(codeMem),k=Object.keys(codeMem.ops||{}).filter(o=>memCount(codeMem,o)).length;
+  if($('cmMemNote'))$('cmMemNote').textContent=`Les associations confirmées dans « CODES » sont retenues sur cet appareil et proposées d'office aux levés suivants du même arpenteur. Mémoire actuelle : ${n} association${n>1?'s':''}${k?` pour ${k} arpenteur${k>1?'s':''}`:''}.`}
+const cmGroups=()=>groupCodes(S.rows,CODES);
+function cmStatusFor(g,sug,op){const m=sug[0];if(m&&m.score>=1000)return 'ok';return g.n===1&&!(m&&m.score>=85)?'ign':'todo'}
+function cmBuild(keep){
+  const op=$('cmOp').value.trim();
+  const prev=keep&&S.cm?S.cm.ch:new Map();
+  const G=cmGroups();const ch=new Map();
+  for(const g of G){const sug=suggestCodes(g.label,CODES,codeMem,op);
+    const p=prev.get(g.key);
+    ch.set(g.key,p&&!p.auto?Object.assign(p,{g,sug}):{g,sug,code:sug[0]?sug[0].code:'',attr:$('cmAttrAll').checked,st:cmStatusFor(g,sug,op),auto:true,q:''});}
+  S.cm={ch,op};
+}
+function cmOpen(auto){
+  if(!S.rows.length){toast('Ouvrez d\'abord un levé.');return}
+  const sv=surveyorOf(S.F,S.fileName);
+  if(!S.cm||S.cm.file!==S.fileName){$('cmOp').value=sv.name||'';S.cm=null}
+  const ops=new Set([...Object.keys(codeMem.ops||{}).filter(Boolean),...Object.values(OLD_STD.surveyor)]);
+  $('cmOps').innerHTML=[...ops].sort().map(o=>`<option value="${esc(o)}">`).join('');
+  cmBuild(true);S.cm.file=S.fileName;S.cm.src=sv;
+  if(!S.cm.ch.size){if(!auto)toast('Tous les codes du levé suivent déjà le standard ArpentNord.');return}
+  $('cmSheet').hidden=false;cmDock();
+  const first=[...S.cm.ch.values()].find(c=>c.g.key===S.cm.focus)||[...S.cm.ch.values()].find(c=>c.st==='todo')||[...S.cm.ch.values()][0];
+  cmFocus(first,true);cmRender();
+}
+function cmOpNote(){
+  const op=$('cmOp').value.trim(),sv=S.cm&&S.cm.src||{};const os=oldStdName(S.fileName);const ci=commentInfo(S.F&&S.F.comments);
+  const bits=[];
+  if(op)bits.push(sv.name&&sv.name===op?`détecté : ${sv.src}`:'choisi à la main');else bits.push('non détecté : inscrivez le nom pour profiter de la mémoire');
+  const n=memCount(codeMem,op);bits.push(n?`${n} association${n>1?'s':''} déjà apprise${n>1?'s':''}`:'aucune association apprise pour l\'instant');
+  if(os&&(os.typeName||os.placeName))bits.push(`nom de fichier (vieux standard) : ${[os.placeName,os.typeName&&'type '+os.typeName,os.companyName].filter(Boolean).join(' · ')}${os.surveyor&&os.surveyor!==op?` · lettre ${os.letter} = ${os.surveyor}`:''}`);
+  if(ci.title)bits.push(`titre : ${ci.title}`);
+  $('cmOpNote').textContent=bits.join(' · ');
+}
+const CM_ST={todo:['warn','À confirmer'],ok:['ok','Confirmé'],ign:['info','Ignoré']};
+function cmCard(c){
+  const g=c.g,codeO=CODES.get(c.code);
+  const vars=[...g.variants.entries()].sort((a,b)=>b[1]-a[1]);
+  const names=g.rows.slice(0,6).map(i=>S.rows[i].name).join(', ')+(g.n>6?'…':'');
+  const learned=c.sug[0]&&c.sug[0].score>=1000&&c.sug[0].code===c.code;
+  const opts=c.sug.map(s=>{const k=CODES.get(s.code);return `<option value="${s.code}"${s.code===c.code?' selected':''}>${s.code} ${esc(k.abr)} · ${esc(k.desc)} — ${esc(s.why)}</option>`});
+  if(c.code&&!c.sug.some(s=>s.code===c.code)&&codeO)opts.unshift(`<option value="${c.code}" selected>${c.code} ${esc(codeO.abr)} · ${esc(codeO.desc)} — choisi</option>`);
+  if(!opts.length)opts.push('<option value="" selected>Aucune proposition : chercher un code</option>');
+  const [sv,sl]=CM_ST[c.st];
+  const out=c.st==='ign'?'Laissé tel quel (reste signalé en anomalie)':c.code?`→ <b>${esc(mappedDesc(c.code,vars[0][0],c.attr))}</b>${vars.length>1?` · ${esc(mappedDesc(c.code,vars[1][0],c.attr))}`:''}`:'Choisir un code';
+  return `<div class="cmg ${c.st}${S.cm.focus===g.key?' cur':''}" data-k="${esc(g.key)}">
+  <div class="cmh"><span class="pill ${sv}">${learned&&c.st==='ok'?'Appris':sl}</span><b>${vars.map(v=>esc(v[0])+(vars.length>1?` <span class="note">×${v[1]}</span>`:'')).join(' · ')}</b><span class="note">${g.n} point${g.n>1?'s':''} : ${esc(names)}</span><button class="btn sm" data-a="see" type="button">Voir sur le plan</button></div>
+  <div class="cmrow"><select data-a="sel" aria-label="Code ArpentNord pour ${esc(g.label)}">${opts.join('')}<option value="?">Autre code… (rechercher)</option></select>
+    <label><input type="checkbox" data-a="attr"${c.attr?' checked':''}> texte d'origine en attribut</label>
+    <button class="btn sm${c.st==='ok'?'':' primary'}" data-a="ok" type="button"${c.code?'':' disabled'}>${c.st==='ok'?'Confirmé ✓':'Confirmer'}</button>
+    <button class="btn sm" data-a="ign" type="button">${c.st==='ign'?'Ne plus ignorer':'Ignorer'}</button></div>
+  <div class="cmsearch" ${c.search?'':'hidden'}><input data-a="q" type="search" placeholder="Chiffre (38, 381) ou mot (excavation, talus)…" value="${esc(c.q||'')}" aria-label="Rechercher un code ArpentNord"><div class="cmres">${c.search?cmResults(c.q):''}</div></div>
+  <div class="cmout">${out}</div></div>`;
+}
+function cmResults(q){const L=searchCodes(q||'',CODES,30);
+  if(!q)return '<span class="note" style="padding:6px 8px">Tapez un chiffre ou un mot.</span>';
+  if(!L.length)return '<span class="note" style="padding:6px 8px">Aucun code trouvé.</span>';
+  return L.map(c=>`<button type="button" data-a="pick" data-code="${c.code}"><b>${c.code} ${esc(c.abr)}</b><span>${esc(c.desc)} <span class="note">· ${esc(c.cat)}</span></span></button>`).join('')}
+function cmRender(){
+  const all=[...S.cm.ch.values()];const main=all.filter(c=>c.g.n>1),uni=all.filter(c=>c.g.n===1);
+  const nPts=all.reduce((s,c)=>s+c.g.n,0);
+  $('cmIntro').textContent=`${nPts} point${nPts>1?'s':''} du levé ont un code hors standard, regroupés en ${all.length} code${all.length>1?'s':''} (majuscules, accents, tirets, ordre des mots et abréviations confondus). Pour chaque groupe : vérifiez la proposition, cherchez un autre code au besoin, puis confirmez.`;
+  $('cmList').innerHTML=main.map(cmCard).join('')||'<p class="note">Aucun code répété.</p>';
+  $('cmUniq').hidden=!uni.length;$('cmUniqSum').textContent=`Codes uniques (1 point chacun) : ${uni.length} — optionnels, ignorés par défaut sauf proposition sûre`;$('cmListU').innerHTML=uni.map(cmCard).join('');
+  const ok=all.filter(c=>c.st==='ok'&&c.code);const n=ok.reduce((s,c)=>s+c.g.n,0);
+  $('cmGo').disabled=!ok.length;$('cmGo').textContent=ok.length?`Appliquer (${ok.length} code${ok.length>1?'s':''} · ${n} point${n>1?'s':''})`:'Appliquer';
+  $('cmAllOk').disabled=!all.some(c=>c.st==='todo'&&c.code);
+  cmOpNote();
+}
+function cmFind(el){const card=el.closest('.cmg');return card&&S.cm.ch.get(card.dataset.k)}
+function cmSetCode(c,code){c.code=code;c.auto=false;c.search=false;if(c.st==='ign')c.st='todo'}
+/* Groupe courant : ses points encerclés et cadrés dans la partie du plan que le panneau ne couvre pas */
+function cmFocus(c,zoom){S.cm.focus=c.g.key;S.hl=new Set(c.g.rows);
+  if(zoom!==false&&S.view){const R=c.g.rows.map(i=>S.rows[i]).filter(r=>r&&!r.bad);if(R.length){let x0=1e99,y0=1e99,x1=-1e99,y1=-1e99;for(const r of R){x0=Math.min(x0,r.e);x1=Math.max(x1,r.e);y0=Math.min(y0,r.n);y1=Math.max(y1,r.n)}
+    const cr=cv.getBoundingClientRect(),dr=$('cmSheet').getBoundingClientRect();const covW=Math.max(0,Math.min(cr.right,dr.right)-Math.max(cr.left,dr.left))*(dr.top<=cr.top+4?1:0),covH=Math.max(0,cr.bottom-Math.max(cr.top,dr.top))*(dr.top>cr.top+4?1:0);
+    const W=Math.max(80,S.W-covW*S.W/cr.width),H=Math.max(80,S.H-covH*S.H/cr.height),w=Math.max(x1-x0,6),h=Math.max(y1-y0,6),k=Math.min(W/w,H/h)*0.8;
+    S.view={cx:(x0+x1)/2+(S.W-W)/2/k,cy:(y0+y1)/2-(S.H-H)/2/k,k};}}
+  draw();}
+function cmScroll(c){const el=$('cmSheet').querySelector(`.cmg[data-k="${CSS.escape(c.g.key)}"]`);if(el){const d=el.closest('details');if(d)d.open=true;el.scrollIntoView({block:'nearest'})}}
+function cmDock(){const d=$('cmSheet');d.style.top=innerWidth>900?Math.max(0,pw.getBoundingClientRect().top)+'px':''}
+addEventListener('resize',()=>{if(!$('cmSheet').hidden)cmDock()});
+function cmCloseUI(){$('cmSheet').hidden=true;S.hl=null;draw()}
+$('cmSheet').addEventListener('click',e=>{const card=e.target.closest('.cmg');if(card&&!e.target.closest('[data-a],input,select,label,button')){const c=cmFind(card);if(c){cmFocus(c,true);cmRender()}return}
+  const t=e.target.closest('[data-a]');if(!t)return;const c=cmFind(t);if(!c)return;const a=t.dataset.a;
+  if(a==='ok'){c.st=c.st==='ok'?'todo':'ok';c.auto=false}
+  else if(a==='ign'){c.st=c.st==='ign'?'todo':'ign';c.auto=false}
+  else if(a==='pick'){cmSetCode(c,t.dataset.code);c.st='ok'}
+  else if(a==='see'){cmFocus(c,true)}
+  else return;
+  cmRender();});
+$('cmSheet').addEventListener('change',e=>{const t=e.target;const c=cmFind(t);if(!c)return;
+  if(t.dataset.a==='sel'){if(t.value==='?'){c.search=true;c.auto=false;cmRender();const q=$('cmSheet').querySelector(`.cmg[data-k="${CSS.escape(c.g.key)}"] input[data-a="q"]`);if(q)q.focus();return}cmSetCode(c,t.value);cmRender()}
+  else if(t.dataset.a==='attr'){c.attr=t.checked;c.auto=false;cmRender()}});
+$('cmSheet').addEventListener('input',e=>{const t=e.target;if(t.dataset.a!=='q')return;const c=cmFind(t);if(!c)return;c.q=t.value;t.closest('.cmsearch').querySelector('.cmres').innerHTML=cmResults(c.q)});
+$('cmAllOk').onclick=()=>{for(const c of S.cm.ch.values())if(c.st==='todo'&&c.code){c.st='ok';c.auto=false}cmRender()};
+$('cmAttrAll').onchange=()=>{for(const c of S.cm.ch.values()){c.attr=$('cmAttrAll').checked}cmRender()};
+$('cmOp').onchange=()=>{cmBuild(true);cmRender()};
+$('cmClose').onclick=cmCloseUI;$('cmX').onclick=cmCloseUI;
+$('tCodes').onclick=()=>cmOpen(false);
+function cmApply(){
+  const sel=[...S.cm.ch.values()].filter(c=>c.st==='ok'&&c.code&&CODES.has(c.code));if(!sel.length)return;
+  const op=$('cmOp').value.trim();const tNow=new Date().toLocaleString('fr-CA'),today=new Date().toISOString().slice(0,10);
+  const items=[];let n=0;
+  for(const c of sel){const k=CODES.get(c.code);
+    for(const i of c.g.rows){const r=S.rows[i];const before=r.desc;const after=mappedDesc(c.code,before,c.attr);if(after===before)continue;
+      items.push({r,st:snapState(r)});r.desc=after;n++;
+      S.journal.push({name:r.name,before,after,why:`Code hors standard « ${c.g.label} » associé à ${c.code} ${k.abr} (${k.desc})${op?' · arpenteur '+op:''}`,t:tNow});}
+    codeMem=memLearn(codeMem,op,c.g.keys,c.code,c.attr,today);}
+  if(!items.length){toast('Aucun changement à appliquer.');return}
+  S.hist.push({type:'snap',items,fields:['desc'],label:'Codes du levé'});
+  cmSaveMem();$('cmSheet').hidden=true;S.cm=null;S.hl=null;run();
+  toast(`${n} point(s) recodé(s) dans ${sel.length} groupe(s)${op?` · mémoire de ${op} mise à jour`:' · inscrivez l\'arpenteur pour que la mémoire serve aux prochains levés'}.`);
+}
+$('cmGo').onclick=cmApply;
+$('cmMemExp').onclick=()=>{const d=new Date().toISOString().slice(0,10);save(`memoire-codes-${d}.json`,new TextEncoder().encode(JSON.stringify(codeMem,null,1)))};
+$('cmMemIn').onchange=async e=>{const f=e.target.files&&e.target.files[0];e.target.value='';if(!f)return;
+  try{const j=JSON.parse(await f.text());if(!j||!j.ops)throw 0;codeMem=memMerge(codeMem,j);const m=codeMem._merged||0;delete codeMem._merged;cmSaveMem();
+    if(S.cm&&!$('cmSheet').hidden){cmBuild(true);cmRender()}toast(`Mémoire importée : ${m} association(s) ajoutée(s) ou mise(s) à jour.`)}
+  catch(err){toast('Fichier de mémoire illisible (attendu : .json exporté par cet outil).')}};
+cmMemNote();
 
 /* Application installable et utilisable hors ligne au terrain */
 if('serviceWorker' in navigator && location.protocol==='https:'){navigator.serviceWorker.register('sw.js').catch(()=>{});}
