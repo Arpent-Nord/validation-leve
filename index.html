@@ -356,7 +356,7 @@ tr.hion td{background:color-mix(in srgb,#ffc440 18%,transparent)}
             <code>_</code><span>Liaison multiple sur un même point : <code>526 1.2_2.1</code> ferme le string 1 et débute le string 2 ; <code>181 1_186 1.1</code> continue le 181 et débute le 186 (double Pcode). Autant de liaisons que voulu.</span>
           </div>
           <p class="note">Format lu&nbsp;: <code>Matricule,Est,Nord,Élév,Description</code> où la description est <code>Pcode String.Contrôle [attributs]</code>, ex. <code>526 1.1</code>. Le fichier _modif est toujours écrit au format <code>P,N,E,Z,D</code> (Point, Nord, Est, Élév., Description), sans ligne d'en-tête, quel que soit le format lu. Il contient les descriptions corrigées, les coordonnées des points inversés et les points calculés (rectangle), insérés juste après le dernier point de leur ligne.</p>
-          <p class="note">Version v9.6.5-2026-11-03 · fonctionne hors ligne une fois ouverte · les fichiers restent sur l'appareil.</p>
+          <p class="note">Version v9.6.6-2026-11-03 · fonctionne hors ligne une fois ouverte · les fichiers restent sur l'appareil.</p>
           <div class="actions"><button class="btn sm" id="bJournal" type="button" disabled>Exporter le journal des corrections (.csv)</button><button class="btn sm" id="bResetLay" type="button">Rétablir les couches du gabarit</button></div>
         </div>
       </div>
@@ -2373,7 +2373,7 @@ function planShot(box,keepTool){
   return url&&{url,noBg:noBg&&BG.src!=='none',w:S.W,h:S.H};
 }
 function anaSvg(R){
-  const W=900,H=230,ml=58,mr=12,mt=14,mb=34;const pr=R.prof,th=R.thal;
+  const W=900,H=244,ml=58,mr=22,mt=28,mb=34;const pr=R.prof,th=R.thal;
   const bords=(R.slopes||[]).filter(x=>!x.centre),bz=bords.flatMap(x=>x.ps.map(q=>q.z));
   let z0=Math.min(...th.map(p=>p.z),...pr.map(p=>p.z),...bz),z1=Math.max(...th.map(p=>isNaN(p.w)?p.z:p.w),...pr.map(p=>p.z),...bz);const dz=Math.max(.05,z1-z0);z0-=dz*.12;z1+=dz*.18;
   const X=s=>ml+s/R.L*(W-ml-mr),Y=z=>mt+(z1-z)/(z1-z0)*(H-mt-mb);
@@ -2387,7 +2387,11 @@ function anaSvg(R){
   const bl=bords.map((x,k)=>`<path d="M${x.ps.map(q=>X(cl(q.s)).toFixed(1)+','+Y(q.z).toFixed(1)).join('L')}" fill="none" stroke="${BC[k%4]}" stroke-width="1.5" stroke-dasharray="5 4"/>`).join('');
   const cS=(R.slopes||[]).find(x=>x.centre)||{ms:R.ms,mz:R.mz};const avl=R.avgReg!=null&&(R.slopes||[]).length>1?`<path d="M${X(0).toFixed(1)},${Y(cS.mz+R.avgReg*(0-cS.ms)).toFixed(1)}L${X(R.L).toFixed(1)},${Y(cS.mz+R.avgReg*(R.L-cS.ms)).toFixed(1)}" stroke="#6b7780" stroke-width="1" stroke-dasharray="8 5" fill="none"/>`:'';
   const leg=(R.slopes||[]).length>1?`<div style="font-size:11px;color:#5d6b73;display:flex;flex-wrap:wrap;gap:4px 14px;margin:2px 0 0 ${ml}px"><span><b style="color:#0e6f66">━</b> centre ${esc((R.slopes.find(x=>x.centre)||{}).label||'')} : ${((R.slopes.find(x=>x.centre)||{}).slope||0).toFixed(2)} %</span>${bords.map((x,k)=>`<span><b style="color:${BC[k%4]}">┅</b> bord ${esc(x.side)} ${esc(x.label)} : ${x.slope.toFixed(2)} %</span>`).join('')}<span><b style="color:#6b7780">╌</b> pente moyenne ${R.avgSlope.toFixed(2)} %</span><span><b style="color:#3c9bff">■</b> eau accumulée</span></div>`:'';
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Profil du fond de fossé" style="max-width:${W}px;font-family:Segoe UI,Arial,sans-serif">${gr.join('')}${water}${line}${bl}${avl}${pts}
+  // repères 1 et 2 (comme sur le plan) et flèche du sens d'écoulement
+  const mk=(x,n)=>`<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${mt}" y2="${H-mb}" stroke="#e0a800" stroke-width="1" stroke-dasharray="3 3"/><circle cx="${x.toFixed(1)}" cy="${mt-12}" r="10" fill="#ffc440" stroke="#14191d" stroke-width="1"/><text x="${x.toFixed(1)}" y="${mt-8}" text-anchor="middle" font-size="12" font-weight="700" fill="#14191d">${n}</text>`;
+  const fl=R.flow||{},xa=X(R.L*(fl.toB?.35:.65)),xb=X(R.L*(fl.toB?.65:.35)),ya=mt-12,hd=fl.toB?-1:1;
+  const arrow=`<line x1="${xa.toFixed(1)}" x2="${xb.toFixed(1)}" y1="${ya}" y2="${ya}" stroke="#1e88e5" stroke-width="2.5"/><path d="M${xb.toFixed(1)},${ya}l${(9*hd).toFixed(1)},-5v10z" fill="#1e88e5"/><text x="${((xa+xb)/2).toFixed(1)}" y="${ya-5}" text-anchor="middle" font-size="11" font-weight="600" fill="#1e88e5">écoulement ${fl.slope!=null?fl.slope.toFixed(2)+' %':''}</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Profil du fond de fossé" style="max-width:${W}px;font-family:Segoe UI,Arial,sans-serif">${gr.join('')}${water}${line}${bl}${avl}${pts}${mk(X(0),1)}${mk(X(R.L),2)}${arrow}
   <text x="${ml}" y="${H-4}" font-size="10" fill="#5d6b73">${esc(R.A.name)} (0 m)</text><text x="${W-mr}" y="${H-4}" font-size="10" text-anchor="end" fill="#5d6b73">${esc(R.B.name)} (${R.L.toFixed(1)} m)</text>
   <text x="${(ml+W-mr)/2}" y="${H-4}" font-size="10" text-anchor="middle" fill="#5d6b73">chaînage (m) · élévation (m), exagération verticale</text></svg>${leg}`;
 }
