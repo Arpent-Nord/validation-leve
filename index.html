@@ -227,6 +227,8 @@ tr.hion td{background:color-mix(in srgb,#ffc440 18%,transparent)}
     <button class="btn" id="bTxt" type="button" disabled>Exporter _modif.txt</button>
     <button class="btn primary" id="bDxf" type="button" disabled>Exporter DXF</button>
     <button class="btn" id="bRep" type="button" disabled title="Rapport de levé imprimable (appareil, système, opérateur, qualité, contrôles, corrections)">Rapport</button>
+    <button class="btn" id="bDir" type="button" hidden title="Choisir le dossier de travail du projet : la séance (_seance.json, mise à jour automatiquement), le _modif.txt, le DXF et le rapport y sont enregistrés directement">Dossier de travail…</button>
+    <button class="btn" id="bSess" type="button" disabled title="Enregistrer la séance d'édition dans un fichier (_seance.json) à ranger dans le dossier du projet ; il se rouvre avec « Ouvrir un levé… », sur ce poste ou un autre">Sauvegarder la séance</button>
     <button class="btn primary" id="bMail" type="button" disabled>Envoyer par Outlook…</button>
   </header>
   <nav class="tools" aria-label="Outils de construction">
@@ -353,7 +355,7 @@ tr.hion td{background:color-mix(in srgb,#ffc440 18%,transparent)}
             <code>_</code><span>Liaison multiple sur un même point : <code>526 1.2_2.1</code> ferme le string 1 et débute le string 2 ; <code>181 1_186 1.1</code> continue le 181 et débute le 186 (double Pcode). Autant de liaisons que voulu.</span>
           </div>
           <p class="note">Format lu&nbsp;: <code>Matricule,Est,Nord,Élév,Description</code> où la description est <code>Pcode String.Contrôle [attributs]</code>, ex. <code>526 1.1</code>. Le fichier _modif est toujours écrit au format <code>P,N,E,Z,D</code> (Point, Nord, Est, Élév., Description), sans ligne d'en-tête, quel que soit le format lu. Il contient les descriptions corrigées, les coordonnées des points inversés et les points calculés (rectangle), insérés juste après le dernier point de leur ligne.</p>
-          <p class="note">Version v9.5.2-2026-11-03 · fonctionne hors ligne une fois ouverte · les fichiers restent sur l'appareil.</p>
+          <p class="note">Version v9.6-2026-11-03 · fonctionne hors ligne une fois ouverte · les fichiers restent sur l'appareil.</p>
           <div class="actions"><button class="btn sm" id="bJournal" type="button" disabled>Exporter le journal des corrections (.csv)</button><button class="btn sm" id="bResetLay" type="button">Rétablir les couches du gabarit</button></div>
         </div>
       </div>
@@ -1348,7 +1350,7 @@ function load(text,name){
   $('fname').textContent=name+' · '+F.rows.length+' points';
   $('nameList').innerHTML=F.rows.map(r=>`<option value="${esc(r.name)}">`).join('');
   run();fit();
-  ['bTxt','bDxf','bJournal','bMail','bRep'].forEach(id=>$(id).disabled=false);
+  ['bTxt','bDxf','bJournal','bMail','bRep','bSess'].forEach(id=>$(id).disabled=false);
   const nRen=(F.renamed||[]).length;
   toast(`${name} chargé${F.fmt?' (format '+F.fmt+')':''} : ${F.rows.length} points${nRen?` · ${nRen} point(s) à nom non numérique renuméroté(s)`:''}.`);
   if(S.issues.some(i=>i.kind==='codemap'))setTimeout(()=>cmOpen(true),0);
@@ -1368,7 +1370,7 @@ function readFile(file){
   return readBuf(file).then(buf=>{
     if(!buf||!buf.byteLength){toast(`${file.name||'Le fichier'} est vide ou n'a pas été transmis par le téléphone (fichier iCloud non téléchargé ?).`);return}
     let n=(file.name||'').split(/[\\/]/).pop()||'leve.txt';if(!/\.[a-z0-9]{2,4}$/i.test(n))n+='.txt';
-    try{load(decodeBytes(buf),n)}catch(err){toast('Erreur à l\'analyse : '+(err&&err.message||err));console.error(err)}
+    try{if(/\.json$/i.test(n)){const t=new TextDecoder('utf-8').decode(buf);if(sessFromFile(t,n))return;toast(`${n} n'est pas un fichier de séance de Validation de levé.`);return}load(decodeBytes(buf),n)}catch(err){toast('Erreur à l\'analyse : '+(err&&err.message||err));console.error(err)}
   }).catch(err=>{toast('Lecture du fichier impossible ('+(err&&err.name||'erreur')+'). Essayez « Coller ».');console.error(err)});
 }
 /* Collage : pour les fichiers que le sélecteur du téléphone ne voit pas (pièces jointes Outlook…) */
@@ -1484,22 +1486,36 @@ function sessKeyOf(name,text){let h=2166136261;for(let k=0;k<text.length;k++){h^
 function sessList(){try{const v=JSON.parse(localStorage.getItem(SESS_KEY)||'[]');return Array.isArray(v)?v:[]}catch(e){return []}}
 function sessPut(L){for(;;){try{localStorage.setItem(SESS_KEY,JSON.stringify(L));return true}catch(e){if(L.length<=1)return false;L=L.slice(0,-1)}}}
 function sessDrop(key){sessPut(sessList().filter(x=>x.key!==key))}
-let sessT=null;function sessSchedule(){clearTimeout(sessT);sessT=setTimeout(sessSave,700)}
+let sessT=null;function sessSchedule(){clearTimeout(sessT);sessT=setTimeout(sessSave,700);if(typeof WD!=='undefined'&&WD.ok&&S.hist&&S.hist.length)sessFileSave()}
 function sessSave(){
   clearTimeout(sessT);if(!S.F||!S.sessKey||S.restoring)return;
   if(S.sessPending){if(!S.hist.length)return;S.sessPending=null;$('sessBar').hidden=true}
+  const ent=sessEntry();if(!ent)return;
+  const L=[ent,...sessList().filter(x=>x.key!==S.sessKey)].slice(0,SESS_MAX);
+  if(!sessPut(L))toast('Sauvegarde automatique impossible (mémoire du navigateur pleine).');
+}
+function sessEntry(force){
   const nMod=S.rows.filter(r=>r.added||r.del||isModified(r)).length;
-  if(!S.hist.length&&!nMod){return}
+  if(!force&&!S.hist.length&&!nMod){return null}
   const idx=new Map(S.rows.map((r,k)=>[r,k]));
   const rows=S.rows.map(r=>{const o={name:r.name,desc:r.desc,xyz:r.xyz.slice(),e:r.e,n:r.n,z:r.z};
     if(r.k0!=null&&!r.added)o.k0=r.k0;else Object.assign(o,{added:true,li:r.li,raw:r.raw||'',fields:r.fields,cols:r.cols,oxyz:r.oxyz,orig:r.orig||''});
     for(const k of ['del','hi','swapNote','bad'])if(r[k]!=null)o[k]=r[k];
     if(r.calc){const c=r.calc;o.calc=Object.assign({},c,{refs:(c.refs||[]).map(x=>typeof x==='number'?x:idx.get(x)).filter(x=>x!=null)})}
     return o});
-  const ent={key:S.sessKey,name:S.fileName,enc:S.enc,t:Date.now(),n:nMod,text:S.srcText,rows,journal:S.journal,renumLog:S.renumLog||[],hiLog:S.hiLog||[]};
-  const L=[ent,...sessList().filter(x=>x.key!==S.sessKey)].slice(0,SESS_MAX);
-  if(!sessPut(L))toast('Sauvegarde automatique impossible (mémoire du navigateur pleine).');
+  return {key:S.sessKey,name:S.fileName,enc:S.enc,t:Date.now(),n:nMod,text:S.srcText,rows,journal:S.journal,renumLog:S.renumLog||[],hiLog:S.hiLog||[]};
 }
+/* Fichier de séance : même contenu que la sauvegarde automatique + analyses ajoutées au rapport */
+function sessFileName(){return S.fileName.replace(/\.[^.]+$/,'')+'_seance.json'}
+function sessDoc(){const ent=sessEntry(true);return ent&&Object.assign({type:'validation-leve-seance',v:1,app:'v9.6',saved:new Date().toISOString()},ent,{anas:S.anas||[]})}
+$('bSess').onclick=()=>{if(!S.F)return;const doc=sessDoc(),ent=doc;
+  const nm=sessFileName();save(nm,new Blob([JSON.stringify(doc)],{type:'application/json'}));
+  S.journal.push({name:'Séance',before:'',after:nm,why:`Séance d'édition enregistrée dans ${nm} (${ent.n} point(s) corrigé(s))`,t:new Date().toLocaleString('fr-CA')});};
+function sessFromFile(txt,fname){let d;try{d=JSON.parse(txt)}catch(e){return false}
+  if(!d||d.type!=='validation-leve-seance'||!d.text||!Array.isArray(d.rows)){return false}
+  sessRestore(d);S.anas=Array.isArray(d.anas)?d.anas:[];
+  toast(`Séance reprise depuis ${fname} : ${d.n||0} point(s) corrigé(s), enregistrée le ${new Date(d.t||d.saved).toLocaleString('fr-CA')}${S.anas.length?` · ${S.anas.length} analyse(s)`:''}. Vous reprenez où vous en étiez.`);
+  return true}
 function sessRestore(ent){
   S.restoring=true;S.nextEnc=ent.enc||null;
   try{if(load(ent.text,ent.name)===false)return;
@@ -2011,7 +2027,7 @@ S.tool=null;
 function toolStart(kind){
   if(!S.rows.length){toast('Ouvrez d\'abord un levé.');return}
   S.swapPick=null;
-  S.tool=S.tool&&S.tool.kind===kind?null:Object.assign({kind,picks:[],lc:kind==='link'?S.lastLc||null:undefined},kind==='ana'?{hw:12,cell:.2,maxEdge:6,off:new Set()}:{});
+  S.tool=S.tool&&S.tool.kind===kind?null:Object.assign({kind,picks:[],lc:kind==='link'?S.lastLc||null:undefined},kind==='ana'?{hw:12,cell:.2,maxEdge:6,off:new Set(ANA_OFF),codesOpen:true}:{});
   S.rectPrev=null;toolRender();draw();
 }
 function toolRender(){
@@ -2151,6 +2167,9 @@ function linkWithCode(t){
    eau accumulée dans les cuvettes (remplissage des dépressions, sortie aux 2 limites),
    débordement possible (cuvette qui atteint le bord latéral de la surface), sens d'écoulement général.
    Résultats indicatifs : ne remplacent pas une surface Civil 3D. */
+/* Codes décochés d'office pour la surface : points dont le Z n'est pas le sol (clôtures, poteaux, bâtiments, arbres, glissières, câbles…) */
+const ANA_OFF=new Set([61,63,200,29, 88,110,111,112,113,116,120,121,126,128,129,130,134,446,447,530,531, 137,525,205,211,212,213,214,215,216,217,218,219,220,249,438,
+  210,224,225,226,227,230, 161,172,173,925, 221,295,296,459,380,460, 26,56,80,280,281, 191,192,194,202,203,367,368,385,397,414,246].map(String));
 function anaDelaunay(P){
   let x0=1e99,y0=1e99,x1=-1e99,y1=-1e99;for(const p of P){x0=Math.min(x0,p[0]);y0=Math.min(y0,p[1]);x1=Math.max(x1,p[0]);y1=Math.max(y1,p[1])}
   const d=Math.max(x1-x0,y1-y0)*20+10,mx=(x0+x1)/2,my=(y0+y1)/2,n=P.length;
@@ -2274,11 +2293,11 @@ function anaRender(bar){
       <b>Débordement</b> : ${R.nOver?`<span style="color:var(--err)"><b>${R.nOver} cuvette(s) débordent</b> : trop-plein vers le côté ${[...new Set(R.ponds.filter(p=>p.over).map(p=>p.side))].join(', ')})</span>`:'<span style="color:var(--ok,#1a8f5a)">aucun</span>'}`;}
     const codes=anaCodesIn(t);t.off=t.off||new Set();
     extra=`<div class="tbrow" style="flex-wrap:wrap;gap:6px 14px"><label class="note">Demi-largeur (m) <input id="anHw" type="number" step="1" min="2" style="width:4.5em" value="${t.hw}"></label><label class="note">Maille (m) <input id="anC" type="number" step=".05" min=".05" style="width:4.5em" value="${t.cell}"></label><label class="note">Triangle max (m) <input id="anE" type="number" step=".5" min="1" style="width:4.5em" value="${t.maxEdge}"></label><label class="note"><input type="checkbox" id="anTin" ${t.showTin!==false?'checked':''}> voir la surface</label></div>
-    <details class="note" style="margin:4px 0"><summary>Codes retenus pour la surface (${codes.length-[...t.off].filter(k=>codes.some(c=>c[0]===k)).length}/${codes.length})</summary><div class="tbrow" style="flex-wrap:wrap;gap:2px 12px;max-height:9em;overflow:auto">${codes.map(([k,c])=>{const d=CODES.get(k);return `<label><input type="checkbox" class="anCode" value="${esc(k)}" ${t.off.has(k)?'':'checked'}> ${esc(k)} ${d?esc(d.abr):''} <span class="note">(${c})</span></label>`}).join('')}</div></details>`;}
+    <details class="note" id="anCodes" style="margin:4px 0" ${t.codesOpen!==false?'open':''}><summary>Codes retenus pour la surface (${codes.length-[...t.off].filter(k=>codes.some(c=>c[0]===k)).length}/${codes.length}) — décochez les points dont le Z n'est pas le sol</summary><div class="tbrow" style="flex-wrap:wrap;gap:2px 12px;max-height:9em;overflow:auto">${codes.map(([k,c])=>{const d=CODES.get(k);return `<label><input type="checkbox" class="anCode" value="${esc(k)}" ${t.off.has(k)?'':'checked'}> ${esc(k)} ${d?esc(d.abr):''} <span class="note">(${c})</span></label>`}).join('')}</div></details>`;}
   bar.innerHTML=`<div class="tbmsg">${msg}</div>${extra}<div class="actions"><button class="btn sm primary" id="tbGo" type="button" ${ok?'':'disabled'}>Ajouter au rapport</button><button class="btn sm" id="tbReset" type="button">Recommencer</button><button class="btn sm" id="tbClose" type="button">Fermer</button></div>`;
   const re=()=>{anaRun(t);toolRender();draw()};
   if($('anHw')){$('anHw').onchange=e=>{t.hw=Math.max(2,+e.target.value||12);re()};$('anC').onchange=e=>{t.cell=Math.max(.05,+e.target.value||.2);re()};$('anE').onchange=e=>{t.maxEdge=Math.max(1,+e.target.value||6);re()};
-    $('anTin').onchange=e=>{t.showTin=e.target.checked;draw()};bar.querySelectorAll('.anCode').forEach(x=>x.onchange=()=>{x.checked?t.off.delete(x.value):t.off.add(x.value);re()})}
+    $('anTin').onchange=e=>{t.showTin=e.target.checked;draw()};$('anCodes').ontoggle=e=>{t.codesOpen=e.target.open};bar.querySelectorAll('.anCode').forEach(x=>x.onchange=()=>{x.checked?t.off.delete(x.value):t.off.add(x.value);re()})}
   $('tbGo').onclick=()=>anaAdd(t);$('tbReset').onclick=()=>{t.picks=[];t.R=null;toolRender();draw()};$('tbClose').onclick=()=>{S.tool=null;toolRender();draw()};
 }
 /* Image du plan pour le rapport : dessin sur une toile à part (l'imagerie en ligne sans autorisation CORS est retirée de l'image) */
@@ -2313,7 +2332,7 @@ async function anaAdd(t){
   let x0=1e99,y0=1e99,x1=-1e99,y1=-1e99;for(const s of [0,R.L])for(const o of [R.omin,R.omax]){const [x,y]=anaW(R,s,o);x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y)}
   const v0=S.view;const pad=Math.max(4,(x1-x0)*.06);fitBox(x0-pad,y0-pad,x1+pad,y1+pad,5);draw();await new Promise(r=>setTimeout(r,1500));S.view=v0;
   const shot=planShot([x0,y0,x1,y1],true);
-  S.anas=S.anas||[];S.anas.push({kind:'fosse',R:{A:{name:R.A.name,z:R.A.z},B:{name:R.B.name,z:R.B.z},L:R.L,nPts:R.nPts,nTri:R.nTri,c:R.c,vol:R.vol,area:R.area,nOver:R.nOver,ponds:R.ponds,flow:{...R.flow,from:{name:R.flow.from.name},to:{name:R.flow.to.name}},profSrc:R.profSrc,t:R.t,hw:t.hw,maxEdge:t.maxEdge,off:[...(t.off||[])]},svg:anaSvg(R),shot});
+  S.anas=S.anas||[];S.anas.push({kind:'fosse',R:{A:{name:R.A.name,z:R.A.z},B:{name:R.B.name,z:R.B.z},L:R.L,nPts:R.nPts,nTri:R.nTri,c:R.c,vol:R.vol,area:R.area,nOver:R.nOver,ponds:R.ponds,flow:{...R.flow,from:{name:R.flow.from.name},to:{name:R.flow.to.name}},profSrc:R.profSrc,t:R.t,hw:t.hw,maxEdge:t.maxEdge,off:(()=>{const pres=new Set(anaCodesIn(t).map(c=>c[0]));return [...(t.off||[])].filter(k=>pres.has(k)).map(k=>{const d=CODES.get(k);return d?k+' '+d.abr:k})})()},svg:anaSvg(R),shot});
   S.journal.push({name:`${R.A.name} → ${R.B.name}`,before:'',after:'',why:`Analyse de fossé ajoutée au rapport : ${R.vol.toFixed(3)} m³ d'eau accumulée, écoulement vers ${R.flow.dir} (${R.flow.slope.toFixed(2)} %), ${R.nOver} débordement(s)`,t:new Date().toLocaleString('fr-CA')});
   toast(`Analyse ajoutée au rapport (${S.anas.length}).`);draw();
 }
@@ -2510,7 +2529,28 @@ cv.addEventListener('dblclick',fit);
 
 /* ---------- Exports ---------- */
 let dl=null;(async()=>{try{dl=await window.claude?.use?.('downloads')}catch(e){dl=null}})();
+/* ---------- Dossier de travail (Chrome / Edge sur ordinateur) ----------
+   Le dossier choisi est retenu sur ce poste (IndexedDB). Les exports et la séance y sont écrits directement ;
+   la séance (<levé>_seance.json) y est aussi mise à jour automatiquement pendant l'édition. */
+const WD={h:null,ok:false};
+const wdIdb=(mode,fn)=>new Promise((res,rej)=>{let rq;try{rq=indexedDB.open('vl-wd',1)}catch(e){return rej(e)}rq.onupgradeneeded=()=>rq.result.createObjectStore('h');rq.onerror=()=>rej(rq.error);
+  rq.onsuccess=()=>{try{const tx=rq.result.transaction('h',mode);const st=tx.objectStore('h');const r=fn(st);tx.oncomplete=()=>res(r&&r.result);tx.onerror=()=>rej(tx.error)}catch(e){rej(e)}}});
+function wdUi(){const b=$('bDir');if(!b)return;b.hidden=!('showDirectoryPicker' in window);
+  b.textContent=WD.h?(WD.ok?`Dossier : ${WD.h.name}`:`Dossier : ${WD.h.name} (à réautoriser)`):'Dossier de travail…';b.classList.toggle('primary',!!WD.h&&!WD.ok)}
+async function wdCheck(ask){if(!WD.h){WD.ok=false;return false}try{const o={mode:'readwrite'};let q=await WD.h.queryPermission(o);if(q!=='granted'&&ask)q=await WD.h.requestPermission(o);WD.ok=q==='granted'}catch(e){WD.ok=false}wdUi();return WD.ok}
+async function wdWrite(name,data){if(!WD.h||!WD.ok)return false;try{const fh=await WD.h.getFileHandle(name,{create:true});const w=await fh.createWritable();await w.write(data instanceof Blob?data:new Blob([data]));await w.close();return true}catch(e){console.warn(e);if(e&&e.name==='NotAllowedError'){WD.ok=false;wdUi()}return false}}
+if($('bDir')){wdUi();
+  $('bDir').onclick=async()=>{
+    if(WD.h&&!WD.ok){if(await wdCheck(true)){toast(`Dossier de travail ${WD.h.name} réautorisé.`);sessFileSave();return}}
+    try{const h=await showDirectoryPicker({id:'vl-travail',mode:'readwrite'});WD.h=h;await wdCheck(true);try{await wdIdb('readwrite',st=>st.put(h,'wd'))}catch(e){}
+      toast(`Dossier de travail : ${h.name}. La séance, le _modif.txt, le DXF et le rapport y seront enregistrés.`);sessFileSave()}catch(e){if(e&&e.name!=='AbortError')toast('Choix du dossier impossible dans ce navigateur.')}};
+  if('showDirectoryPicker' in window)wdIdb('readonly',st=>st.get('wd')).then(async h=>{if(h){WD.h=h;await wdCheck(false)}}).catch(()=>{})}
+/* séance écrite dans le dossier de travail (automatique) */
+let sessFT=null;function sessFileSave(){clearTimeout(sessFT);sessFT=setTimeout(async()=>{if(!WD.ok||!S.F||S.restoring)return;const doc=sessDoc();if(!doc)return;
+  if(await wdWrite(sessFileName(),JSON.stringify(doc))){S.sessFileT=Date.now();const b=$('bSess');if(b)b.title=`Séance enregistrée automatiquement dans ${WD.h.name}/${sessFileName()} à ${new Date().toLocaleTimeString('fr-CA')}`}},1500)}
 async function save(filename,data){
+  if(WD.h&&!WD.ok)await wdCheck(true);
+  if(WD.ok&&await wdWrite(filename,data)){toast(`${filename} enregistré dans le dossier ${WD.h.name}.`);return}
   if(dl){try{await dl.save({filename,data});toast(`${filename} enregistré.`);return}catch(e){if(e&&e.code==='declined'){toast('Enregistrement annulé.');return}if(e&&e.code==='rate_limited'){toast('Une demande d\'enregistrement est déjà ouverte.');return}}}
   try{const blob=data instanceof Blob?data:new Blob([data],{type:'application/octet-stream'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000);toast(`${filename} prêt.`)}
   catch(e){toast('Le téléchargement est bloqué dans cette vue.')}
