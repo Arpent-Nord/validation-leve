@@ -355,7 +355,7 @@ tr.hion td{background:color-mix(in srgb,#ffc440 18%,transparent)}
             <code>_</code><span>Liaison multiple sur un même point : <code>526 1.2_2.1</code> ferme le string 1 et débute le string 2 ; <code>181 1_186 1.1</code> continue le 181 et débute le 186 (double Pcode). Autant de liaisons que voulu.</span>
           </div>
           <p class="note">Format lu&nbsp;: <code>Matricule,Est,Nord,Élév,Description</code> où la description est <code>Pcode String.Contrôle [attributs]</code>, ex. <code>526 1.1</code>. Le fichier _modif est toujours écrit au format <code>P,N,E,Z,D</code> (Point, Nord, Est, Élév., Description), sans ligne d'en-tête, quel que soit le format lu. Il contient les descriptions corrigées, les coordonnées des points inversés et les points calculés (rectangle), insérés juste après le dernier point de leur ligne.</p>
-          <p class="note">Version v9.6-2026-11-03 · fonctionne hors ligne une fois ouverte · les fichiers restent sur l'appareil.</p>
+          <p class="note">Version v9.6.2-2026-11-03 · fonctionne hors ligne une fois ouverte · les fichiers restent sur l'appareil.</p>
           <div class="actions"><button class="btn sm" id="bJournal" type="button" disabled>Exporter le journal des corrections (.csv)</button><button class="btn sm" id="bResetLay" type="button">Rétablir les couches du gabarit</button></div>
         </div>
       </div>
@@ -2193,6 +2193,10 @@ function anaCodesIn(t){// codes présents dans le corridor
     if(s<-3||s>L+3||Math.abs(o)>t.hw)continue;const pc=parseDesc(r.desc).pcode||'?';m.set(pc,(m.get(pc)||0)+1)}
   return [...m.entries()].sort((a,b)=>(+a[0]||1e9)-(+b[0]||1e9));
 }
+function anaLinesIn(t){const A=S.rows[t.picks[0]],B=S.rows[t.picks[1]];const dx=B.e-A.e,dy=B.n-A.n,L=Math.hypot(dx,dy)||1,ux=dx/L,uy=dy/L;const out=[];
+  for(const Ln of S.lines){let n=0,so=0;for(const i of Ln.pts){const r=S.rows[i];if(!r||r.bad||r.del)continue;const s=(r.e-A.e)*ux+(r.n-A.n)*uy,o=-(r.e-A.e)*uy+(r.n-A.n)*ux;if(s<-3||s>L+3||Math.abs(o)>t.hw)continue;n++;so+=o}
+    if(n>=2)out.push({key:Ln.key,pc:String(Ln.pcode),str:Ln.str,n,side:Math.abs(so/n)<.5?'centre':so>0?anaSide(-uy,ux):anaSide(uy,-ux)})}
+  return out.sort((a,b)=>a.side.localeCompare(b.side)||(+a.pc)-(+b.pc))}
 function anaCompute(t){
   const A=S.rows[t.picks[0]],B=S.rows[t.picks[1]];
   const dx=B.e-A.e,dy=B.n-A.n,L=Math.hypot(dx,dy);if(L<2)return {err:'Les deux limites doivent être à plus de 2 m l\'une de l\'autre.'};
@@ -2202,25 +2206,37 @@ function anaCompute(t){
   const P=[],Z=[],seen=new Map();let nPts=0;
   const add=(s,o,z,isPt)=>{if(!inC(s,o)||!isFinite(z))return;const k=Math.round(s/.02)+','+Math.round(o/.02);if(seen.has(k))return;seen.set(k,1);P.push([s,o]);Z.push(z);if(isPt)nPts++};
   const okRow=r=>r&&!r.bad&&!r.del&&!off.has(parseDesc(r.desc).pcode||'?');
-  for(const r of S.rows)if(okRow(r)){const [s,o]=loc(r.e,r.n);add(s,o,r.z,true)}
+  // Frontières (lignes cochées + frontière tracée par points) : la surface est coupée à ces lignes ; elles servent aussi de limite à ne pas franchir
+  const lim=t.lim||new Set(),limPts=[],FR=[];
+  const addPoly=rows=>{rows=rows.filter(r=>r&&!r.bad&&!r.del);if(rows.length<2)return;const raw=rows.map(r=>{const [s1,o1]=loc(r.e,r.n);return [s1,o1,r.z]}),pts=[];
+    for(let k=1;k<raw.length;k++){const a=raw[k-1],b=raw[k],d=Math.hypot(b[0]-a[0],b[1]-a[1]),m=Math.max(1,Math.ceil(d/.2));for(let q=(k>1?1:0);q<=m;q++){const f=q/m;pts.push([a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f,a[2]+(b[2]-a[2])*f])}}
+    const mo=pts.reduce((x,q)=>x+q[1],0)/pts.length;FR.push({raw,pts,side:mo>=0?1:-1});limPts.push(...pts)};
+  for(const Ln of S.lines){if(!lim.has(Ln.key))continue;const ids=Ln.pts.slice();if(Ln.closed&&ids.length>2)ids.push(ids[0]);addPoly(ids.map(i=>S.rows[i]))}
+  if(t.fp&&t.fp.length>=2)addPoly(t.fp.map(i=>S.rows[i]).sort((a,b)=>((a.e-A.e)*ux+(a.n-A.n)*uy)-((b.e-A.e)*ux+(b.n-A.n)*uy)));
+  const bnd=(s,side)=>{let best=null;for(const F of FR){if(F.side!==side)continue;const p=F.raw;for(let k=1;k<p.length;k++){const a=p[k-1],b=p[k];if(a[0]===b[0]||(a[0]-s)*(b[0]-s)>0)continue;const o=a[1]+(b[1]-a[1])*(s-a[0])/(b[0]-a[0]);if(best==null||(side>0?o<best:o>best))best=o}}return best};
+  const inB=(s,o,tol)=>{if(!FR.length)return true;const u=bnd(s,1),l=bnd(s,-1);return (u==null||o<=u+tol)&&(l==null||o>=l-tol)};
+  for(const r of S.rows)if(okRow(r)){const [s,o]=loc(r.e,r.n);if(inB(s,o,.05))add(s,o,r.z,true)}
   // lignes densifiées finement : la triangulation suit alors les lignes (lignes de rupture) au lieu de les traverser
   let segL=0;for(const Ln of S.lines){if(off.has(String(Ln.pcode)))continue;for(let k=1;k<Ln.pts.length;k++){const a=S.rows[Ln.pts[k-1]],b=S.rows[Ln.pts[k]];if(!a||!b)continue;const [s1,o1]=loc(a.e,a.n),[s2,o2]=loc(b.e,b.n);if(inC(s1,o1)||inC(s2,o2))segL+=Math.hypot(b.e-a.e,b.n-a.n)}}
   const step=Math.max(.2,segL/6000);
   for(const Ln of S.lines){if(off.has(String(Ln.pcode)))continue;const ids=Ln.pts.slice();if(Ln.closed&&ids.length>2)ids.push(ids[0]);
     for(let k=1;k<ids.length;k++){const a=S.rows[ids[k-1]],b=S.rows[ids[k]];if(!okRow(a)||!okRow(b))continue;
-      const d=Math.hypot(b.e-a.e,b.n-a.n),m=Math.floor(d/step);for(let q=1;q<m;q++){const f=q/m;const [s,o]=loc(a.e+(b.e-a.e)*f,a.n+(b.n-a.n)*f);add(s,o,a.z+(b.z-a.z)*f,false)}}}
+      const d=Math.hypot(b.e-a.e,b.n-a.n),m=Math.floor(d/step);for(let q=1;q<m;q++){const f=q/m;const [s,o]=loc(a.e+(b.e-a.e)*f,a.n+(b.n-a.n)*f);if(inB(s,o,.05))add(s,o,a.z+(b.z-a.z)*f,false)}}}
+  for(const q of limPts)if(inC(q[0],q[1]))add(q[0],q[1],q[2],false);
   if(nPts<3)return {err:'Moins de 3 points retenus entre les deux limites : élargissez la demi-largeur ou cochez d\'autres codes.'};
   const tris=anaDelaunay(P).filter(([a,b,c])=>{const e1=Math.hypot(P[a][0]-P[b][0],P[a][1]-P[b][1]),e2=Math.hypot(P[b][0]-P[c][0],P[b][1]-P[c][1]),e3=Math.hypot(P[c][0]-P[a][0],P[c][1]-P[a][1]);
-    const ar=Math.abs((P[b][0]-P[a][0])*(P[c][1]-P[a][1])-(P[c][0]-P[a][0])*(P[b][1]-P[a][1]))/2;return Math.max(e1,e2,e3)<=mE&&ar>1e-4});
+    const ar=Math.abs((P[b][0]-P[a][0])*(P[c][1]-P[a][1])-(P[c][0]-P[a][0])*(P[b][1]-P[a][1]))/2;if(!(Math.max(e1,e2,e3)<=mE&&ar>1e-4))return false;
+    return inB((P[a][0]+P[b][0]+P[c][0])/3,(P[a][1]+P[b][1]+P[c][1])/3,.02)});
   if(!tris.length)return {err:'Aucune surface : les points sont trop espacés pour la longueur maximale des triangles.'};
   let omin=1e99,omax=-1e99;for(const t3 of tris)for(const i of t3){omin=Math.min(omin,P[i][1]);omax=Math.max(omax,P[i][1])}
   let c=Math.max(.05,+t.cell||.2);while(Math.ceil(L/c)*Math.ceil((omax-omin)/c)>2.5e6)c*=1.25;
   const nx=Math.max(2,Math.ceil(L/c)),oy0=Math.floor(omin/c)*c,ny=Math.max(2,Math.ceil((omax-oy0)/c)),N=nx*ny;
-  const G=new Float64Array(N).fill(NaN);
+  const G=new Float64Array(N).fill(NaN);const UB=new Float64Array(nx).fill(1e9),LB=new Float64Array(nx).fill(-1e9);
+  if(FR.length)for(let i=0;i<nx;i++){const sc=(i+.5)*c,u=bnd(sc,1),l=bnd(sc,-1);if(u!=null)UB[i]=u;if(l!=null)LB[i]=l}
   for(const [a,b,cI] of tris){const [ax,ay]=P[a],[bx,by]=P[b],[cx,cy]=P[cI];const den=(by-cy)*(ax-cx)+(cx-bx)*(ay-cy);if(Math.abs(den)<1e-12)continue;
     const i0=Math.max(0,Math.floor(Math.min(ax,bx,cx)/c)),i1=Math.min(nx-1,Math.ceil(Math.max(ax,bx,cx)/c)),j0=Math.max(0,Math.floor((Math.min(ay,by,cy)-oy0)/c)),j1=Math.min(ny-1,Math.ceil((Math.max(ay,by,cy)-oy0)/c));
     for(let j=j0;j<=j1;j++){const y=oy0+(j+.5)*c;for(let i=i0;i<=i1;i++){const x=(i+.5)*c;const l1=((by-cy)*(x-cx)+(cx-bx)*(y-cy))/den,l2=((cy-ay)*(x-cx)+(ax-cx)*(y-cy))/den,l3=1-l1-l2;
-      if(l1>=-1e-9&&l2>=-1e-9&&l3>=-1e-9)G[j*nx+i]=l1*Z[a]+l2*Z[b]+l3*Z[cI]}}}
+      if(l1>=-1e-9&&l2>=-1e-9&&l3>=-1e-9&&y<=UB[i]+c/2&&y>=LB[i]-c/2)G[j*nx+i]=l1*Z[a]+l2*Z[b]+l3*Z[cI]}}}
   // remplissage des dépressions (priority-flood). Sorties : les deux limites (lab 0) et les bords latéraux de la surface
   // (lab 1 = côté +v, lab 2 = côté −v). Une cuvette dont le trop-plein part par un bord latéral = débordement possible.
   const W=new Float64Array(N).fill(NaN),vis=new Uint8Array(N),lab=new Int8Array(N).fill(-1);const H=[];
@@ -2235,11 +2251,15 @@ function anaCompute(t){
   const dmin=.003,D=new Float32Array(N);for(let k=0;k<N;k++)D[k]=isNaN(G[k])||isNaN(W[k])?0:Math.max(0,W[k]-G[k]);
   // cuvettes
   const comp=new Int32Array(N).fill(-1),ponds=[];
-  for(let k0=0;k0<N;k0++){if(D[k0]<=dmin||comp[k0]>=0)continue;const id=ponds.length,st=[k0];comp[k0]=id;let n=0,vol=0,mxd=0,lev=-1e99,ss=0,so=0;const lc=[0,0,0];
-    while(st.length){const k=st.pop();const i=k%nx,j=(k-i)/nx;n++;vol+=D[k]*c*c;if(D[k]>mxd)mxd=D[k];lev=Math.max(lev,W[k]);ss+=(i+.5)*c;so+=oy0+(j+.5)*c;lc[lab[k]]++;
+  for(let k0=0;k0<N;k0++){if(D[k0]<=dmin||comp[k0]>=0)continue;const id=ponds.length,st=[k0];comp[k0]=id;let n=0,vol=0,mxd=0,lev=-1e99,ss=0,so=0,smin=1e99,smax=-1e99;const lc=[0,0,0];
+    while(st.length){const k=st.pop();const i=k%nx,j=(k-i)/nx;n++;smin=Math.min(smin,(i+.5)*c);smax=Math.max(smax,(i+.5)*c);vol+=D[k]*c*c;if(D[k]>mxd)mxd=D[k];lev=Math.max(lev,W[k]);ss+=(i+.5)*c;so+=oy0+(j+.5)*c;lc[lab[k]]++;
       for(const [di,dj] of [[1,0],[-1,0],[0,1],[0,-1]]){const ii=i+di,jj=j+dj;if(ii<0||jj<0||ii>=nx||jj>=ny)continue;const q=jj*nx+ii;if(comp[q]<0&&D[q]>dmin){comp[q]=id;st.push(q)}}}
     const L1=lc.indexOf(Math.max(...lc)),s=ss/n,o=so/n;
-    ponds.push({id,n,area:n*c*c,vol,maxD:mxd,level:lev,s,o,E:A.e+s*ux+o*vx,N:A.n+s*uy+o*vy,over:L1>0,side:L1===1?anaSide(vx,vy):L1===2?anaSide(-vx,-vy):null})}
+    const pd={id,n,area:n*c*c,vol,maxD:mxd,level:lev,s,o,E:A.e+s*ux+o*vx,N:A.n+s*uy+o*vy,over:L1>0,side:L1===1?anaSide(vx,vy):L1===2?anaSide(-vx,-vy):null};
+    if(limPts.length){// débordement = niveau d'eau au-dessus de la limite choisie, au droit de la cuvette
+      const near=limPts.filter(q=>q[0]>=smin-1.5&&q[0]<=smax+1.5);
+      if(near.length){const lo=near.reduce((a,q)=>q[2]<a[2]?q:a);pd.limZ=lo[2];pd.rev=lo[2]-lev;pd.over=lev>lo[2]+.003;pd.side=pd.over?(lo[1]>0?anaSide(vx,vy):anaSide(-vx,-vy)):null;pd.contained=!pd.over&&L1>0}}
+    ponds.push(pd)}
   const keep=ponds.filter(p=>p.vol>=(+t.minVol||.005)||p.maxD>=.01);const kid=new Set(keep.map(p=>p.id));
   const mark=new Uint8Array(N);for(let k=0;k<N;k++)if(comp[k]>=0&&kid.has(comp[k]))mark[k]=ponds[comp[k]].over?2:1;
   keep.sort((a,b)=>a.s-b.s);keep.forEach((p,k)=>p.no=k+1);
@@ -2258,7 +2278,7 @@ function anaCompute(t){
   return {A,B,L,ux,uy,vx,vy,c,nx,ny,oy0,omin,omax,G,W,D,mark,ponds:keep,prof,profSrc,thal,nPts,nTri:tris.length,P,tris,
     flow:{from,to,toB,slope:-reg*(toB?1:-1)*100,dir:anaCompass(dirx,diry),zFrom:seq[0].z,zTo:seq[seq.length-1].z,minSl:minSl*100,minAt,adv},
     vol:keep.reduce((a,p)=>a+p.vol,0),area:keep.reduce((a,p)=>a+p.area,0),nOver:keep.filter(p=>p.over).length,
-    sideL:anaSide(vx,vy),t:new Date().toLocaleString('fr-CA')};
+    sideL:anaSide(vx,vy),limPts,limN:FR.length,t:new Date().toLocaleString('fr-CA')};
 }
 function anaImage(R){const cvs=document.createElement('canvas');cvs.width=R.nx;cvs.height=R.ny;const g=cvs.getContext('2d');const im=g.createImageData(R.nx,R.ny);
   for(let k=0;k<R.nx*R.ny;k++){const m=R.mark[k];if(!m)continue;const a=Math.min(235,90+R.D[k]*3000);const o=k*4;if(m===2){im.data[o]=235;im.data[o+1]=40;im.data[o+2]=40}else{im.data[o]=30;im.data[o+1]=150;im.data[o+2]=255}im.data[o+3]=a}
@@ -2271,6 +2291,8 @@ function anaDraw(){
   if(!R.img)R.img=anaImage(R);
   const P0=W2S(...anaW(R,0,R.oy0)),P1=W2S(...anaW(R,R.nx*R.c,R.oy0)),P2=W2S(...anaW(R,0,R.oy0+R.ny*R.c));
   ctx.save();ctx.imageSmoothingEnabled=false;ctx.transform((P1[0]-P0[0])/R.nx,(P1[1]-P0[1])/R.nx,(P2[0]-P0[0])/R.ny,(P2[1]-P0[1])/R.ny,P0[0],P0[1]);ctx.drawImage(R.img,0,0);ctx.restore();
+  if(S.tool&&S.tool.kind==='ana'&&S.tool.fp&&S.tool.fp.length){ctx.font='700 10px Barlow, sans-serif';S.tool.fp.forEach((i,n)=>{const r=S.rows[i];const [x,y]=W2S(r.e,r.n);ctx.fillStyle='#ff8c28';ctx.beginPath();ctx.arc(x,y,7,0,7);ctx.fill();ctx.fillStyle='#14191d';ctx.textAlign='center';ctx.fillText(String(n+1),x,y+3.5);ctx.textAlign='left'})}
+  if(R.limPts&&R.limPts.length){ctx.fillStyle='rgba(255,140,40,.9)';for(const q of R.limPts){const [x,y]=W2S(...anaW(R,q[0],q[1]));ctx.fillRect(x-1.6,y-1.6,3.2,3.2)}}
   ctx.setLineDash([6,4]);ctx.strokeStyle='#ffc440';ctx.lineWidth=2;for(const s of [0,R.L]){const a=W2S(...anaW(R,s,R.omin)),b=W2S(...anaW(R,s,R.omax));ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke()}ctx.setLineDash([]);
   // flèche d'écoulement
   const f=R.flow,s0=R.L*(f.toB?.3:.7),s1=R.L*(f.toB?.7:.3),oA=R.omax+Math.max(1.5,12/S.view.k);const a=W2S(...anaW(R,s0,oA)),b=W2S(...anaW(R,s1,oA));
@@ -2290,14 +2312,20 @@ function anaRender(bar){
       msg=`<b>Fossé ${esc(n[0])} → ${esc(n[1])}</b> · ${R.L.toFixed(1)} m · surface de ${R.nPts} points (${R.nTri} triangles)<br>
       <b>Écoulement</b> vers ${f.dir} : ${esc(f.from.name)} → ${esc(f.to.name)}, pente moyenne <b>${f.slope.toFixed(2)} %</b>${f.adv.length?` · <span style="color:var(--warn)">${f.adv.length} contre-pente(s)</span>`:''}<br>
       <b>Eau accumulée</b> : ${R.ponds.length?`<b>${R.vol.toFixed(R.vol<1?3:2)} m³</b> dans ${R.ponds.length} cuvette(s), ${R.area.toFixed(1)} m², profondeur max ${(Math.max(...R.ponds.map(p=>p.maxD))*100).toFixed(1)} cm`:'aucune cuvette'}<br>
-      <b>Débordement</b> : ${R.nOver?`<span style="color:var(--err)"><b>${R.nOver} cuvette(s) débordent</b> : trop-plein vers le côté ${[...new Set(R.ponds.filter(p=>p.over).map(p=>p.side))].join(', ')})</span>`:'<span style="color:var(--ok,#1a8f5a)">aucun</span>'}`;}
+      <b>Débordement</b> : ${R.nOver?`<span style="color:var(--err)"><b>${R.nOver} cuvette(s) débordent</b>${R.limN?' la limite choisie':''} : trop-plein vers le côté ${[...new Set(R.ponds.filter(p=>p.over).map(p=>p.side))].join(', ')}</span>`:`<span style="color:var(--ok,#1a8f5a)">aucun${R.limN?' au-delà de la limite choisie':''}</span>`}${R.limN&&R.ponds.some(p=>p.rev!=null)?` · revanche minimale ${(Math.min(...R.ponds.filter(p=>p.rev!=null).map(p=>p.rev))*100+0).toFixed(1).replace(/^-0\.0$/,'0.0')} cm`:''}${R.ponds.some(p=>p.contained)?` · ${R.ponds.filter(p=>p.contained).length} cuvette(s) contenue(s) par la limite`:''}`;}
     const codes=anaCodesIn(t);t.off=t.off||new Set();
     extra=`<div class="tbrow" style="flex-wrap:wrap;gap:6px 14px"><label class="note">Demi-largeur (m) <input id="anHw" type="number" step="1" min="2" style="width:4.5em" value="${t.hw}"></label><label class="note">Maille (m) <input id="anC" type="number" step=".05" min=".05" style="width:4.5em" value="${t.cell}"></label><label class="note">Triangle max (m) <input id="anE" type="number" step=".5" min="1" style="width:4.5em" value="${t.maxEdge}"></label><label class="note"><input type="checkbox" id="anTin" ${t.showTin!==false?'checked':''}> voir la surface</label></div>
+    <details class="note" id="anLims" style="margin:4px 0" ${t.limOpen!==false?'open':''}><summary><b>Frontières / limite à ne pas franchir</b> (${(t.lim||new Set()).size} ligne(s)${t.fp&&t.fp.length?` + frontière de ${t.fp.length} points`:''}) — la surface est coupée à ces lignes ; l'eau ne doit pas les franchir</summary>
+      <div class="tbrow" style="gap:6px;margin:4px 0"><button class="btn sm${t.fpMode?' primary':''}" id="anFp" type="button">${t.fpMode?`Terminer la frontière (${(t.fp||[]).length} pts)`:'Frontière par points…'}</button>${t.fp&&t.fp.length?'<button class="btn sm" id="anFpX" type="button">Effacer la frontière par points</button>':''}${t.fpMode?'<span class="note">Touchez les points de la frontière sur le plan (un 2<sup>e</sup> toucher retire le point).</span>':''}</div><div class="tbrow" style="flex-wrap:wrap;gap:2px 12px;max-height:8em;overflow:auto">${anaLinesIn(t).map(l=>{const d=CODES.get(l.pc);return `<label><input type="checkbox" class="anLim" value="${esc(l.key)}" ${(t.lim||new Set()).has(l.key)?'checked':''}> ${esc(l.pc)} ${d?esc(d.abr):''} / ${esc(l.str)} <span class="note">(côté ${l.side}, ${l.n} pts)</span></label>`}).join('')||'<span class="note">aucune ligne dans le tronçon</span>'}</div></details>
     <details class="note" id="anCodes" style="margin:4px 0" ${t.codesOpen!==false?'open':''}><summary>Codes retenus pour la surface (${codes.length-[...t.off].filter(k=>codes.some(c=>c[0]===k)).length}/${codes.length}) — décochez les points dont le Z n'est pas le sol</summary><div class="tbrow" style="flex-wrap:wrap;gap:2px 12px;max-height:9em;overflow:auto">${codes.map(([k,c])=>{const d=CODES.get(k);return `<label><input type="checkbox" class="anCode" value="${esc(k)}" ${t.off.has(k)?'':'checked'}> ${esc(k)} ${d?esc(d.abr):''} <span class="note">(${c})</span></label>`}).join('')}</div></details>`;}
+  if(t.fpMode){const m=extra.match(/<div class="tbrow" style="gap:6px;margin:4px 0">[\s\S]*?<\/div>/);extra=m?m[0]:extra;msg=`<b>Frontière par points</b> : touchez dans l'ordre les points de la frontière (petit talus, limite de propriété…), puis « Terminer la frontière ».`}
   bar.innerHTML=`<div class="tbmsg">${msg}</div>${extra}<div class="actions"><button class="btn sm primary" id="tbGo" type="button" ${ok?'':'disabled'}>Ajouter au rapport</button><button class="btn sm" id="tbReset" type="button">Recommencer</button><button class="btn sm" id="tbClose" type="button">Fermer</button></div>`;
   const re=()=>{anaRun(t);toolRender();draw()};
   if($('anHw')){$('anHw').onchange=e=>{t.hw=Math.max(2,+e.target.value||12);re()};$('anC').onchange=e=>{t.cell=Math.max(.05,+e.target.value||.2);re()};$('anE').onchange=e=>{t.maxEdge=Math.max(1,+e.target.value||6);re()};
-    $('anTin').onchange=e=>{t.showTin=e.target.checked;draw()};$('anCodes').ontoggle=e=>{t.codesOpen=e.target.open};bar.querySelectorAll('.anCode').forEach(x=>x.onchange=()=>{x.checked?t.off.delete(x.value):t.off.add(x.value);re()})}
+    $('anTin').onchange=e=>{t.showTin=e.target.checked;draw()};$('anCodes').ontoggle=e=>{t.codesOpen=e.target.open};$('anLims').ontoggle=e=>{t.limOpen=e.target.open};
+    bar.querySelectorAll('.anLim').forEach(x=>x.onchange=()=>{t.lim=t.lim||new Set();x.checked?t.lim.add(x.value):t.lim.delete(x.value);re()});
+bar.querySelectorAll('.anCode').forEach(x=>x.onchange=()=>{x.checked?t.off.delete(x.value):t.off.add(x.value);re()})}
+  if($('anFp'))$('anFp').onclick=()=>{if(t.fpMode){t.fpMode=false;re()}else{t.fpMode=true;t.fp=t.fp||[];toolRender();draw()}};if($('anFpX'))$('anFpX').onclick=()=>{t.fp=[];t.fpMode=false;re()};
   $('tbGo').onclick=()=>anaAdd(t);$('tbReset').onclick=()=>{t.picks=[];t.R=null;toolRender();draw()};$('tbClose').onclick=()=>{S.tool=null;toolRender();draw()};
 }
 /* Image du plan pour le rapport : dessin sur une toile à part (l'imagerie en ligne sans autorisation CORS est retirée de l'image) */
@@ -2332,20 +2360,20 @@ async function anaAdd(t){
   let x0=1e99,y0=1e99,x1=-1e99,y1=-1e99;for(const s of [0,R.L])for(const o of [R.omin,R.omax]){const [x,y]=anaW(R,s,o);x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y)}
   const v0=S.view;const pad=Math.max(4,(x1-x0)*.06);fitBox(x0-pad,y0-pad,x1+pad,y1+pad,5);draw();await new Promise(r=>setTimeout(r,1500));S.view=v0;
   const shot=planShot([x0,y0,x1,y1],true);
-  S.anas=S.anas||[];S.anas.push({kind:'fosse',R:{A:{name:R.A.name,z:R.A.z},B:{name:R.B.name,z:R.B.z},L:R.L,nPts:R.nPts,nTri:R.nTri,c:R.c,vol:R.vol,area:R.area,nOver:R.nOver,ponds:R.ponds,flow:{...R.flow,from:{name:R.flow.from.name},to:{name:R.flow.to.name}},profSrc:R.profSrc,t:R.t,hw:t.hw,maxEdge:t.maxEdge,off:(()=>{const pres=new Set(anaCodesIn(t).map(c=>c[0]));return [...(t.off||[])].filter(k=>pres.has(k)).map(k=>{const d=CODES.get(k);return d?k+' '+d.abr:k})})()},svg:anaSvg(R),shot});
+  S.anas=S.anas||[];S.anas.push({kind:'fosse',R:{A:{name:R.A.name,z:R.A.z},B:{name:R.B.name,z:R.B.z},L:R.L,nPts:R.nPts,nTri:R.nTri,c:R.c,vol:R.vol,area:R.area,nOver:R.nOver,ponds:R.ponds,flow:{...R.flow,from:{name:R.flow.from.name},to:{name:R.flow.to.name}},profSrc:R.profSrc,t:R.t,limN:R.limN,lims:anaLinesIn(t).filter(l=>(t.lim||new Set()).has(l.key)).map(l=>{const d=CODES.get(l.pc);return `${l.pc}${d?' '+d.abr:''} / ${l.str} (côté ${l.side})`}).concat(t.fp&&t.fp.length>=2?[`frontière par points ${t.fp.map(i=>S.rows[i].name).join(', ')}`]:[]),hw:t.hw,maxEdge:t.maxEdge,off:(()=>{const pres=new Set(anaCodesIn(t).map(c=>c[0]));return [...(t.off||[])].filter(k=>pres.has(k)).map(k=>{const d=CODES.get(k);return d?k+' '+d.abr:k})})()},svg:anaSvg(R),shot});
   S.journal.push({name:`${R.A.name} → ${R.B.name}`,before:'',after:'',why:`Analyse de fossé ajoutée au rapport : ${R.vol.toFixed(3)} m³ d'eau accumulée, écoulement vers ${R.flow.dir} (${R.flow.slope.toFixed(2)} %), ${R.nOver} débordement(s)`,t:new Date().toLocaleString('fr-CA')});
   toast(`Analyse ajoutée au rapport (${S.anas.length}).`);draw();
 }
 function anaReportSec(e,sec,tbl){
   if(!(S.anas||[]).length)return '';
   return sec('Analyses',S.anas.map((a,k)=>{const R=a.R,f=R.flow;
-    const pt=R.ponds.map(p=>`<tr${p.over?' class="out"':''}><td>${p.no}</td><td>${p.s.toFixed(1)}</td><td class="m">${p.E.toFixed(2)}</td><td class="m">${p.N.toFixed(2)}</td><td>${p.area.toFixed(2)}</td><td><b>${p.vol.toFixed(3)}</b></td><td>${(p.maxD*100).toFixed(1)}</td><td>${p.level.toFixed(3)}</td><td>${p.over?'<b>oui</b>, côté '+e(p.side):'non'}</td></tr>`);
+    const pt=R.ponds.map(p=>`<tr${p.over?' class="out"':''}><td>${p.no}</td><td>${p.s.toFixed(1)}</td><td class="m">${p.E.toFixed(2)}</td><td class="m">${p.N.toFixed(2)}</td><td>${p.area.toFixed(2)}</td><td><b>${p.vol.toFixed(3)}</b></td><td>${(p.maxD*100).toFixed(1)}</td><td>${p.level.toFixed(3)}</td>${R.limN?`<td>${p.rev!=null?(p.rev*100).toFixed(1).replace(/^-0\.0$/,'0.0'):'—'}</td>`:''}<td>${p.over?'<b>oui</b>, côté '+e(p.side):p.contained?'non (contenue par la limite)':'non'}</td></tr>`);
     return `<h3>${k+1}. Fossé ${e(R.A.name)} → ${e(R.B.name)} <span class="sub">${R.L.toFixed(1)} m · ${e(R.t)}</span></h3>
 <div class="tiles"><div class="tile"><b>${R.vol.toFixed(R.vol<1?3:2)}</b><span>m³ d'eau accumulée</span></div><div class="tile"><b>${R.ponds.length}</b><span>cuvettes</span></div><div class="tile"><b>${f.slope.toFixed(2)} %</b><span>pente moyenne</span></div><div class="tile ${R.nOver?'err':''}"><b>${R.nOver}</b><span>débordements possibles</span></div></div>
 <p><b>Sens d'écoulement général :</b> vers ${e(f.dir)}, de ${e(f.from.name)} (Z ${f.zFrom.toFixed(3)}) à ${e(f.to.name)} (Z ${f.zTo.toFixed(3)}). Pente moyenne ${f.slope.toFixed(2)} % (droite ajustée sur ${e(R.profSrc)})${f.minAt?` ; pente la plus faible ${f.minSl.toFixed(2)} % entre ${f.minAt[0].s.toFixed(1)} et ${f.minAt[1].s.toFixed(1)} m`:''}.${f.adv.length?` <b style="color:#a86400">${f.adv.length} contre-pente(s)</b> de plus de 1 cm : ${f.adv.map(x=>`${x.a.s.toFixed(1)}–${x.b.s.toFixed(1)} m (+${(x.rise*100).toFixed(1)} cm)`).join(', ')}.`:''}</p>
 ${a.shot?`<figure style="margin:8px 0"><img src="${a.shot.url}" alt="Plan du tronçon analysé" style="width:100%;border:1px solid #d5dde1;border-radius:4px"><figcaption class="note">En bleu : eau accumulée (plus foncé = plus profond) · en rouge : cuvette dont le trop-plein sort par le côté du fossé (débordement) · tirets jaunes : limites du tronçon · flèche : sens d'écoulement.${a.shot.noBg?' Fond de plan non inclus (le serveur d\'imagerie ne permet pas la copie).':''}</figcaption></figure>`:''}
 <h3 class="note">Profil du fond</h3>${a.svg}
-<h3 class="note">Cuvettes (eau qui ne s'écoule pas vers les limites)</h3>${tbl(['No','Chaînage (m)','E','N','Surface (m²)','Volume (m³)','Prof. max (cm)','Niveau d\'eau','Débordement'],pt,'small')}
+<h3 class="note">Cuvettes (eau qui ne s'écoule pas vers les limites)</h3>${tbl(['No','Chaînage (m)','E','N','Surface (m²)','Volume (m³)','Prof. max (cm)','Niveau d\'eau',...(R.limN?['Revanche (cm)']:[]),'Débordement'],pt,'small')}${R.limN?`<p class="note">Frontières de la surface / limite à ne pas franchir : ${(R.lims||[]).map(e).join(', ')} (la surface s'arrête à ces lignes). Revanche = élévation la plus basse de la limite au droit de la cuvette − niveau d'eau ; débordement si le niveau d'eau dépasse la limite.</p>`:''}
 <p class="note">Surface : ${R.nPts} points et les lignes du levé (densifiées), ${R.nTri} triangles de ${R.maxEdge} m au plus, sur ${R.hw} m de part et d'autre de la droite ${e(R.A.name)}–${e(R.B.name)}${R.off.length?` ; codes exclus : ${R.off.map(e).join(', ')}`:''}. Maille de calcul ${R.c.toFixed(2)} m. L'eau peut sortir aux deux limites ; les cuvettes de moins de 5 L et 1 cm sont ignorées. Résultats indicatifs, à confirmer dans Civil 3D au besoin.</p>`}).join(''));
 }
 function repPlanSec(e,sec){
@@ -2355,6 +2383,7 @@ function repPlanSec(e,sec){
 
 function toolPick(i){
   const t=S.tool,k=t.picks.indexOf(i);
+  if(t.kind==='ana'&&t.fpMode&&t.picks.length===2){t.fp=t.fp||[];const q=t.fp.indexOf(i);q>=0?t.fp.splice(q,1):t.fp.push(i);toolRender();draw();return}
   if(S.rows[i]&&S.rows[i].del&&k<0){toast(`Le point ${S.rows[i].name} est effacé : rétablissez-le d'abord (fiche du point).`);return}
   if(t.kind==='hi'&&k<0){t.excl=t.excl||new Set();const r=S.rows[i];if(t.excl.has(r)){t.excl.delete(r);toolRender();draw();return}if(hiSel(t).includes(r)){t.excl.add(r);toolRender();draw();return}}
   if(k>=0)t.picks.splice(k,1);
