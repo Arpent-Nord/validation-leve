@@ -353,7 +353,7 @@ tr.hion td{background:color-mix(in srgb,#ffc440 18%,transparent)}
             <code>_</code><span>Liaison multiple sur un même point : <code>526 1.2_2.1</code> ferme le string 1 et débute le string 2 ; <code>181 1_186 1.1</code> continue le 181 et débute le 186 (double Pcode). Autant de liaisons que voulu.</span>
           </div>
           <p class="note">Format lu&nbsp;: <code>Matricule,Est,Nord,Élév,Description</code> où la description est <code>Pcode String.Contrôle [attributs]</code>, ex. <code>526 1.1</code>. Le fichier _modif est toujours écrit au format <code>P,N,E,Z,D</code> (Point, Nord, Est, Élév., Description), sans ligne d'en-tête, quel que soit le format lu. Il contient les descriptions corrigées, les coordonnées des points inversés et les points calculés (rectangle), insérés juste après le dernier point de leur ligne.</p>
-          <p class="note">Version v9.5.1-2026-11-03 · fonctionne hors ligne une fois ouverte · les fichiers restent sur l'appareil.</p>
+          <p class="note">Version v9.5.2-2026-11-03 · fonctionne hors ligne une fois ouverte · les fichiers restent sur l'appareil.</p>
           <div class="actions"><button class="btn sm" id="bJournal" type="button" disabled>Exporter le journal des corrections (.csv)</button><button class="btn sm" id="bResetLay" type="button">Rétablir les couches du gabarit</button></div>
         </div>
       </div>
@@ -465,8 +465,12 @@ tr.hion td{background:color-mix(in srgb,#ffc440 18%,transparent)}
       <label><input type="radio" name="bgSrc" value="esri"> Imagerie en ligne — Esri World Imagery <span class="note">(dépannage, précision ± 1 m)</span></label>
       <label><input type="radio" name="bgSrc" value="custom"> Service personnalisé (modèle d'URL {z}/{x}/{y})</label>
     </fieldset>
-    <div class="actions"><label class="btn filebtn">Ouvrir des orthos du projet…<input type="file" id="bgFiles" multiple accept=".jpg,.jpeg,.png,.tif,.tiff,.jgw,.pgw,.tfw,.wld,.jpgw,.pngw,.tifw,.xml,.prj"></label><button class="btn" id="bgClear" type="button">Retirer les orthos</button></div>
-    <p class="note">Ortho géoréférencée : image JPG / PNG avec son fichier de calage du même nom (.jgw / .pgw / .wld), en coordonnées MTM du levé. Choisissez l'image et son fichier ensemble ; plusieurs tuiles à la fois sont acceptées.</p>
+    <div id="bgPick" style="border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:8px 0;display:grid;gap:8px">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px"><b style="min-width:11.5em">1. Image de l'ortho</b><label class="btn sm filebtn">Choisir l'image…<input type="file" id="bgImgIn" accept=".jpg,.jpeg,.png,.tif,.tiff"></label><span class="note mono" id="bgImgN">aucune</span></div>
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px"><b style="min-width:11.5em">2. Fichier de référence</b><label class="btn sm filebtn">Choisir le fichier de référence…<input type="file" id="bgRefIn" multiple accept=".jgw,.pgw,.tfw,.wld,.jpgw,.pngw,.tifw,.xml,.prj"></label><span class="note mono" id="bgRefN">aucun</span></div>
+      <p class="note" style="margin:0">Fichier de référence : le calage <b>.jgw</b> (ou .pgw / .tfw / .wld) et, s'il existe, le <b>.aux.xml</b> qui donne le système (MTM, UTM…) ; on peut choisir les deux ensemble (Ctrl + clic). Une ortho en UTM ou dans une autre zone est convertie en MTM de la zone ci-dessous.</p>
+      <div class="actions" style="margin:0"><button class="btn primary sm" id="bgGo" type="button" disabled>Ouvrir l'ortho</button><label class="btn sm filebtn">Plusieurs tuiles à la fois…<input type="file" id="bgFiles" multiple accept=".jpg,.jpeg,.png,.tif,.tiff,.jgw,.pgw,.tfw,.wld,.jpgw,.pngw,.tifw,.xml,.prj"></label><button class="btn sm" id="bgClear" type="button">Retirer les orthos</button></div>
+    </div>
     <div class="field" id="bgUrlBox" hidden><label for="bgUrl">Modèle d'URL (tuiles Web Mercator)</label><input id="bgUrl" class="mono" placeholder="https://…/{z}/{y}/{x}.jpg"></div>
     <div class="row3">
       <div class="field"><label for="bgZone">Zone MTM (en ligne)</label><select id="bgZone"><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option selected>8</option><option>9</option><option>10</option></select></div>
@@ -2926,21 +2930,27 @@ function bgFit(o,crs){const zM=+BG.zone||8;
   const [lab,f]=tries[0];return {o:f?bgReproj(o,f,zM):o,how:lab,hit:false}}
 BG.pend={img:new Map(),wf:new Map(),aux:new Map(),prj:new Map()};
 /* Dimensions lues dans l'en-tête (JPEG SOF / PNG IHDR) sans décoder l'image */
-async function bgDims(f){try{const b=new Uint8Array(await f.slice(0,Math.min(f.size,1<<20)).arrayBuffer());
+async function bgDims(f){try{const b=new Uint8Array(await f.slice(0,Math.min(f.size,32<<20)).arrayBuffer());
   if(b[0]===0x89&&b[1]===0x50)return {w:(b[16]<<24|b[17]<<16|b[18]<<8|b[19])>>>0,h:(b[20]<<24|b[21]<<16|b[22]<<8|b[23])>>>0};
-  if(b[0]===0xFF&&b[1]===0xD8){let i=2;while(i+9<b.length){if(b[i]!==0xFF){i++;continue}const m=b[i+1];if(m===0xD8||m===0x01||(m>=0xD0&&m<=0xD7)){i+=2;continue}const L=b[i+2]<<8|b[i+3];
-    if((m>=0xC0&&m<=0xC3)||(m>=0xC5&&m<=0xC7)||(m>=0xC9&&m<=0xCB)||(m>=0xCD&&m<=0xCF))return {h:b[i+5]<<8|b[i+6],w:b[i+7]<<8|b[i+8]};i+=2+L}}}catch(e){}return null}
+  if(b[0]===0xFF&&b[1]===0xD8){let i=2;while(i+9<b.length){if(b[i]!==0xFF){i++;continue}const m=b[i+1];if(m===0xFF){i++;continue}if(m===0xD8||m===0x01||m===0x00||(m>=0xD0&&m<=0xD7)){i+=2;continue}const L=b[i+2]<<8|b[i+3];
+    if((m>=0xC0&&m<=0xC3)||(m>=0xC5&&m<=0xC7)||(m>=0xC9&&m<=0xCB)||(m>=0xCD&&m<=0xCF))return {h:b[i+5]<<8|b[i+6],w:b[i+7]<<8|b[i+8],bits:b[i+4],nc:b[i+9],arith:m>=0xC9,fmt:'JPEG'};i+=2+L}return {fmt:'JPEG'}}
+  if((b[0]===0x49&&b[1]===0x49)||(b[0]===0x4D&&b[1]===0x4D))return {fmt:'TIFF'};
+  if(b[4]===0x6A&&b[5]===0x50)return {fmt:'JPEG 2000'};return {fmt:'inconnu ('+[...b.slice(0,4)].map(x=>x.toString(16).padStart(2,'0')).join(' ')+')'}}catch(e){}return null}
+function bgWhy(f,dm){if(!dm)return '';if(/^inconnu/.test(dm.fmt)||(dm.fmt==='JPEG'&&!dm.w))return ` (le fichier ne contient pas d'en-tête d'image valide : il est probablement endommagé — copie incomplète ou corrompue. Ouvrez-le dans Windows pour vérifier, puis retéléchargez-le ou réexportez l'ortho)`;if(dm.fmt!=='JPEG')return ` (le fichier est en format ${dm.fmt}, pas un JPEG lisible : exportez l'ortho en JPG)`;
+  if(dm.bits&&dm.bits!==8)return ` (JPEG ${dm.bits} bits : les navigateurs ne lisent que le JPEG 8 bits ; exportez en JPG 8 bits)`;if(dm.arith)return ' (JPEG à codage arithmétique non pris en charge : exportez en JPG standard)';
+  if(dm.nc===4)return ' (JPEG CMJN : exportez en RVB)';return ` (${dm.w} × ${dm.h} px : trop grande pour ce navigateur, exportez une version plus légère)`}
 /* Décodage : les très grandes orthos (drone) sont réduites à 8192 px de côté (≈ 40 Mpx) pour rester lisibles par le navigateur */
-async function bgDecode(f){const d=await bgDims(f);const MAXS=8192,MAXP=40e6;let sc=1;
+async function bgDecode(f){let d=await bgDims(f);if(d&&!d.w)d=null;const MAXS=8192,MAXP=40e6;let sc=1;
   if(d&&d.w&&d.h)sc=Math.min(1,MAXS/Math.max(d.w,d.h),Math.sqrt(MAXP/(d.w*d.h)));
   const tries=sc<1?[sc,sc/2]:[1,.5,.25];let last=null;
   for(const k of tries){try{const img=k<1&&d?await createImageBitmap(f,{resizeWidth:Math.max(1,Math.round(d.w*k)),resizeHeight:Math.max(1,Math.round(d.h*k)),resizeQuality:'medium'}):await createImageBitmap(f);
       return {img,w:img.width,h:img.height,W:d?d.w:img.width,H:d?d.h:img.height}}catch(e){last=e;if(!d)break}}
   if(!d||sc===1){try{const im=await new Promise((res,rej)=>{const x=new Image();x.onload=()=>res(x);x.onerror=rej;x.src=URL.createObjectURL(f)});return {img:im,w:im.naturalWidth,h:im.naturalHeight,W:im.naturalWidth,H:im.naturalHeight}}catch(e){}}
   throw last||new Error('illisible')}
-$('bgFiles').onchange=async e=>{const fs=[...e.target.files];e.target.value='';
+async function bgOpenFiles(fs,pair){
   const key=n=>n.toLowerCase().replace(/\.aux\.xml$/,'').replace(/\.(jgw|pgw|tfw|wld|jpgw|pngw|tifw|prj|xml)$/,'').replace(/\.(jpe?g|png|tiff?)$/,'');
   const P=BG.pend;const ign=[];
+  if(pair){const k0=key(pair.name);for(const f of fs){const n=f.name.toLowerCase();if(f===pair)P.img.set(k0,f);else if(/\.aux\.xml$|\.xml$/.test(n))P.aux.set(k0,f);else if(/\.prj$/.test(n))P.prj.set(k0,f);else P.wf.set(k0,f)}fs=[]}
   for(const f of fs){const n=f.name.toLowerCase();
     if(/\.aux\.xml$/.test(n))P.aux.set(key(n),f);else if(/\.(jgw|pgw|tfw|wld|jpgw|pngw|tifw)$/.test(n))P.wf.set(key(n),f);else if(/\.prj$/.test(n))P.prj.set(key(n),f);else if(/\.(jpe?g|png|tiff?)$/.test(n))P.img.set(key(n),f);else ign.push(f.name)}
   let n=0;const errs=[],notes=[];
@@ -2950,7 +2960,7 @@ $('bgFiles').onchange=async e=>{const fs=[...e.target.files];e.target.value='';
     if(wfF){const v=(await wfF.text()).replace(/,/g,'.').split(/\s+/).filter(Boolean).map(Number);if(v.length>=6&&v.slice(0,6).every(isFinite)){w=v.slice(0,6);src=wfF.name}else errs.push(`${wfF.name} illisible (6 nombres attendus)`)}
     if(prjF&&!crs){try{crs=bgCrsOf(await prjF.text())}catch(er){}}
     if(!w){continue}// attend son calage
-    let dec;try{dec=await bgDecode(f)}catch(err){const dm=await bgDims(f);errs.push(`${f.name} : image non lisible par ce navigateur${/tiff?$/i.test(f.name)?' (exportez en JPG + JGW)':dm?` (${dm.w} × ${dm.h} px : trop grande, exportez une version plus légère)`:''}`);P.img.delete(k);continue}
+    let dec;try{dec=await bgDecode(f)}catch(err){const dm=await bgDims(f);errs.push(`${f.name} : image non lisible par ce navigateur${/tiff?$/i.test(f.name)?' (exportez en JPG + JGW)':bgWhy(f,dm)}`);P.img.delete(k);P.wf.delete(k);P.aux.delete(k);P.prj.delete(k);continue}
     let [A,D,B,E,C,F]=w;const fx=dec.W/dec.w,fy=dec.H/dec.h;
     if(fx!==1||fy!==1){const C0=C-A/2-B/2,F0=F-D/2-E/2;A*=fx;D*=fx;B*=fy;E*=fy;C=C0+A/2+B/2;F=F0+D/2+E/2;notes.push(`${f.name} : ${dec.W} × ${dec.H} px réduite à ${dec.w} × ${dec.h} px pour l'affichage`)}
     let o={name:f.name,img:dec.img,w:dec.w,h:dec.h,A,B,C,D,E,F};
@@ -2963,7 +2973,14 @@ $('bgFiles').onchange=async e=>{const fs=[...e.target.files];e.target.value='';
     wait.length?`${wait.join(', ')} : fichier de calage pas encore choisi — ouvrez aussi le .jgw (ou le .aux.xml) du même nom`:'',
     !n&&!wait.length&&orphan.length?`${orphan.join(', ')} : choisissez maintenant l'image (.jpg) du même nom`:'',errs.join(' ; '),ign.length?`ignoré(s) : ${ign.join(', ')}`:''].filter(Boolean).join(' · ');
   toast(msg||'Aucun fichier reconnu : choisissez l\'image (.jpg/.png) et son calage (.jgw/.pgw/.wld ou .aux.xml).');
-  const st=$('bgStatus');if(st&&msg)st.textContent=msg};
+  const st=$('bgStatus');if(st&&msg)st.textContent=msg;return n}
+$('bgFiles').onchange=e=>{const fs=[...e.target.files];e.target.value='';bgOpenFiles(fs)};
+BG.pick={img:null,ref:[]};
+const bgPickUi=()=>{$('bgImgN').textContent=BG.pick.img?BG.pick.img.name:'aucune';$('bgRefN').textContent=BG.pick.ref.length?BG.pick.ref.map(f=>f.name).join(' + '):'aucun';$('bgGo').disabled=!BG.pick.img};
+$('bgImgIn').onchange=e=>{BG.pick.img=e.target.files[0]||null;e.target.value='';bgPickUi()};
+$('bgRefIn').onchange=e=>{BG.pick.ref=[...e.target.files];e.target.value='';bgPickUi()};
+$('bgGo').onclick=async()=>{const p=BG.pick;if(!p.img)return;if(!p.ref.length){toast('Choisissez aussi le fichier de référence (.jgw ou .aux.xml) de l\'image.');return}
+  $('bgGo').disabled=true;$('bgGo').textContent='Ouverture…';const n=await bgOpenFiles([p.img,...p.ref],p.img);$('bgGo').textContent='Ouvrir l\'ortho';if(n){BG.pick={img:null,ref:[]}}bgPickUi()};
 bgSync();
 
 /* ---------- Codes hors standard → liste ArpentNord (bouton CODES) ----------
