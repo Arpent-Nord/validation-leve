@@ -248,6 +248,7 @@ tr.hion td{background:color-mix(in srgb,#ffc440 18%,transparent)}
     <button class="toolbtn" id="tRenum" type="button" aria-pressed="false" title="Renuméroter les points selon le standard ArpentNord (jour julien ou date)"><svg viewBox="0 0 40 26" aria-hidden="true"><path d="M8 8h9M7 15h9M11 4l-2 15M16 4l-2 15" class="il"/><text x="20" y="17" font-size="9" font-family="monospace" fill="currentColor">001</text></svg><span>NUMÉROTER</span></button>
     <button class="toolbtn" id="tCodes" type="button" aria-pressed="false" title="Associer les codes hors standard du levé (texte libre, autre système, fichier d'un tiers) à la liste ArpentNord"><svg viewBox="0 0 40 26" aria-hidden="true"><text x="2" y="11" font-size="8" font-family="monospace" fill="currentColor">abc</text><path d="M20 8h8m-3-3 3 3-3 3" class="ia"/><text x="14" y="23" font-size="9" font-family="monospace" font-weight="700" fill="currentColor">381</text></svg><span>CODES</span></button>
     <button class="toolbtn" id="tUnlinkAll" type="button" aria-pressed="false" title="Effacer les codes de liaison (string et contrôle) pour refaire les lignes à la main avec LIER 2 PTS"><svg viewBox="0 0 40 26" aria-hidden="true"><path d="M5 18L15 8M25 18L35 8" class="ig"/><path d="M14 14l12 0" class="il"/><path d="M17 11l6 6M23 11l-6 6" class="ia"/></svg><span>EFFACER LIAISONS</span></button>
+    <button class="toolbtn" id="tAna" type="button" aria-pressed="false" title="Analyses ajoutées au rapport : fossé (eau accumulée, débordement, sens d'écoulement)"><svg viewBox="0 0 40 26" aria-hidden="true"><path d="M3 8l9 9h16l9-9" class="il"/><path d="M13 15h14" class="ia" stroke-width="2.4"/><path d="M8 22h22m-4-3 4 3-4 3" class="ia"/></svg><span>ANALYSE</span></button>
     <span class="tsep"></span>
     <button class="btn sm primary" id="tAll" type="button" hidden>Créer les points des commandes (0)</button>
   </nav>
@@ -352,7 +353,7 @@ tr.hion td{background:color-mix(in srgb,#ffc440 18%,transparent)}
             <code>_</code><span>Liaison multiple sur un même point : <code>526 1.2_2.1</code> ferme le string 1 et débute le string 2 ; <code>181 1_186 1.1</code> continue le 181 et débute le 186 (double Pcode). Autant de liaisons que voulu.</span>
           </div>
           <p class="note">Format lu&nbsp;: <code>Matricule,Est,Nord,Élév,Description</code> où la description est <code>Pcode String.Contrôle [attributs]</code>, ex. <code>526 1.1</code>. Le fichier _modif est toujours écrit au format <code>P,N,E,Z,D</code> (Point, Nord, Est, Élév., Description), sans ligne d'en-tête, quel que soit le format lu. Il contient les descriptions corrigées, les coordonnées des points inversés et les points calculés (rectangle), insérés juste après le dernier point de leur ligne.</p>
-          <p class="note">Version v9.4-2026-11-03 · fonctionne hors ligne une fois ouverte · les fichiers restent sur l'appareil.</p>
+          <p class="note">Version v9.5-2026-11-03 · fonctionne hors ligne une fois ouverte · les fichiers restent sur l'appareil.</p>
           <div class="actions"><button class="btn sm" id="bJournal" type="button" disabled>Exporter le journal des corrections (.csv)</button><button class="btn sm" id="bResetLay" type="button">Rétablir les couches du gabarit</button></div>
         </div>
       </div>
@@ -1336,7 +1337,7 @@ function load(text,name){
   if(!ok){toast(`${name} ne ressemble pas à un levé : attendu Matricule,Est,Nord,Élév,Description.`);return false}
   S.tool=null;if($('toolbar'))toolRender();
   F.rows.forEach((r,k)=>r.k0=k);S.srcText=text;S.sessKey=sessKeyOf(name,text);S.sessPending=null;$('sessBar').hidden=true;
-  S.F=F;S.rows=F.rows;S.fileName=name;S.cm=null;S.hl=null;$('cmSheet').hidden=true;S.enc=S.nextEnc||'windows-1252';S.nextEnc=null;S.hist=[];S.sel=null;S.cur=-1;S.journal=[];
+  S.F=F;S.rows=F.rows;S.fileName=name;S.cm=null;S.hl=null;$('cmSheet').hidden=true;S.enc=S.nextEnc||'windows-1252';S.nextEnc=null;S.hist=[];S.sel=null;S.cur=-1;S.journal=[];S.anas=[];
   const tNow=new Date().toLocaleString('fr-CA');
   for(const x of (F.leica&&F.leica.notes)||[]) S.journal.push({name:x.name,before:'',after:'',why:x.why,t:tNow});
   for(const x of F.renamed||[]) S.journal.push({name:x.name,before:`${x.old} · ${x.before}`,after:x.after,why:x.keep?`Nom non numérique ${x.old} (fichier d'un logiciel ou d'un tiers) renuméroté ${x.name} pour Civil 3D ; description conservée`:`Point d'implantation / contrôle ${x.old} renuméroté ${x.name} (nom non numérique refusé par Civil 3D) ; no du monument en description`,t:tNow});
@@ -1995,7 +1996,7 @@ function select(i,zoom){
 }
 
 /* ---------- Plan ---------- */
-const cv=$('plan');const ctx=cv.getContext('2d');
+const cv=$('plan');let ctx=cv.getContext('2d');
 function size(){const r=pw.getBoundingClientRect();const d=window.devicePixelRatio||1;cv.width=Math.max(1,r.width*d);cv.height=Math.max(1,r.height*d);ctx.setTransform(d,0,0,d,0,0);S.W=r.width;S.H=r.height;draw()}
 new ResizeObserver(size).observe(pw);
 function fitBox(x0,y0,x1,y1,pad){const w=Math.max(x1-x0,pad),h=Math.max(y1-y0,pad);S.view={cx:(x0+x1)/2,cy:(y0+y1)/2,k:Math.min(S.W/w,S.H/h)*0.82}}
@@ -2006,12 +2007,13 @@ S.tool=null;
 function toolStart(kind){
   if(!S.rows.length){toast('Ouvrez d\'abord un levé.');return}
   S.swapPick=null;
-  S.tool=S.tool&&S.tool.kind===kind?null:{kind,picks:[],lc:kind==='link'?S.lastLc||null:undefined};
+  S.tool=S.tool&&S.tool.kind===kind?null:Object.assign({kind,picks:[],lc:kind==='link'?S.lastLc||null:undefined},kind==='ana'?{hw:12,cell:.2,maxEdge:6,off:new Set()}:{});
   S.rectPrev=null;toolRender();draw();
 }
 function toolRender(){
   for(const [id,k] of TOOLS)$(id).setAttribute('aria-pressed',S.tool?.kind===k);
   const bar=$('toolbar');if(!S.tool){bar.hidden=true;S.rectPrev=null;S.calcPrev=null;if(S.rows.length)renderPts();return}
+  if(S.tool.kind==='ana'){anaRender(bar);return}
   if(CMD_NEED[S.tool.kind]&&S.tool.kind!=='RECT'){calcToolRender(bar);return}
   const t=S.tool,n=t.picks.map(i=>S.rows[i].name);bar.hidden=false;
   let msg,ok=false,extra='';
@@ -2140,19 +2142,208 @@ function linkWithCode(t){
   else S.tool={kind:'link',picks:[b],chain:true,lc:t.lc,cl};
   toolRender();draw();
 }
+/* ===================== ANALYSE (v9.5) =====================
+   Fossé : surface (TIN des points et des lignes retenus) entre 2 limites touchées,
+   eau accumulée dans les cuvettes (remplissage des dépressions, sortie aux 2 limites),
+   débordement possible (cuvette qui atteint le bord latéral de la surface), sens d'écoulement général.
+   Résultats indicatifs : ne remplacent pas une surface Civil 3D. */
+function anaDelaunay(P){
+  let x0=1e99,y0=1e99,x1=-1e99,y1=-1e99;for(const p of P){x0=Math.min(x0,p[0]);y0=Math.min(y0,p[1]);x1=Math.max(x1,p[0]);y1=Math.max(y1,p[1])}
+  const d=Math.max(x1-x0,y1-y0)*20+10,mx=(x0+x1)/2,my=(y0+y1)/2,n=P.length;
+  const V=P.concat([[mx-d,my-d],[mx+d,my-d],[mx,my+d]]);
+  const cc=(a,b,c)=>{const ax=V[a][0],ay=V[a][1],bx=V[b][0],by=V[b][1],cx=V[c][0],cy=V[c][1];
+    const D=2*(ax*(by-cy)+bx*(cy-ay)+cx*(ay-by));if(Math.abs(D)<1e-12)return [a,b,c,mx,my,1e300];
+    const a2=ax*ax+ay*ay,b2=bx*bx+by*by,c2=cx*cx+cy*cy;const ux=(a2*(by-cy)+b2*(cy-ay)+c2*(ay-by))/D,uy=(a2*(cx-bx)+b2*(ax-cx)+c2*(bx-ax))/D;
+    return [a,b,c,ux,uy,(ax-ux)**2+(ay-uy)**2]};
+  let T=[cc(n,n+1,n+2)];
+  const ord=[...P.keys()];for(let k=ord.length-1;k>0;k--){const j=Math.floor(Math.random()*(k+1));[ord[k],ord[j]]=[ord[j],ord[k]]}
+  for(const i of ord){const px=V[i][0],py=V[i][1];const keep=[],E=new Map();
+    for(const t of T){if((px-t[3])**2+(py-t[4])**2<t[5]*(1-1e-12)){for(const [a,b] of [[t[0],t[1]],[t[1],t[2]],[t[2],t[0]]]){const k=a<b?a+','+b:b+','+a;if(E.has(k))E.delete(k);else E.set(k,[a,b])}}else keep.push(t)}
+    for(const [a,b] of E.values())keep.push(cc(a,b,i));T=keep}
+  return T.filter(t=>t[0]<n&&t[1]<n&&t[2]<n).map(t=>[t[0],t[1],t[2]]);
+}
+function anaSide(vx,vy){return Math.abs(vy)>=Math.abs(vx)?(vy>0?'nord':'sud'):(vx>0?'est':'ouest')}
+function anaCompass(dx,dy){const a=(Math.atan2(dx,dy)*180/Math.PI+360)%360;return ['le nord','le nord-est','l\'est','le sud-est','le sud','le sud-ouest','l\'ouest','le nord-ouest'][Math.round(a/45)%8]}
+function anaCodesIn(t){// codes présents dans le corridor
+  const A=S.rows[t.picks[0]],B=S.rows[t.picks[1]];const dx=B.e-A.e,dy=B.n-A.n,L=Math.hypot(dx,dy)||1,ux=dx/L,uy=dy/L;
+  const m=new Map();for(const r of S.rows){if(r.bad||r.del)continue;const s=(r.e-A.e)*ux+(r.n-A.n)*uy,o=-(r.e-A.e)*uy+(r.n-A.n)*ux;
+    if(s<-3||s>L+3||Math.abs(o)>t.hw)continue;const pc=parseDesc(r.desc).pcode||'?';m.set(pc,(m.get(pc)||0)+1)}
+  return [...m.entries()].sort((a,b)=>(+a[0]||1e9)-(+b[0]||1e9));
+}
+function anaCompute(t){
+  const A=S.rows[t.picks[0]],B=S.rows[t.picks[1]];
+  const dx=B.e-A.e,dy=B.n-A.n,L=Math.hypot(dx,dy);if(L<2)return {err:'Les deux limites doivent être à plus de 2 m l\'une de l\'autre.'};
+  const ux=dx/L,uy=dy/L,vx=-uy,vy=ux,hw=+t.hw||12,mE=+t.maxEdge||6,mg=Math.min(3,mE);
+  const loc=(e,n)=>[(e-A.e)*ux+(n-A.n)*uy,(e-A.e)*vx+(n-A.n)*vy];
+  const off=t.off||new Set(),inC=(s,o)=>s>=-mg&&s<=L+mg&&Math.abs(o)<=hw;
+  const P=[],Z=[],seen=new Map();let nPts=0;
+  const add=(s,o,z,isPt)=>{if(!inC(s,o)||!isFinite(z))return;const k=Math.round(s/.02)+','+Math.round(o/.02);if(seen.has(k))return;seen.set(k,1);P.push([s,o]);Z.push(z);if(isPt)nPts++};
+  const okRow=r=>r&&!r.bad&&!r.del&&!off.has(parseDesc(r.desc).pcode||'?');
+  for(const r of S.rows)if(okRow(r)){const [s,o]=loc(r.e,r.n);add(s,o,r.z,true)}
+  // lignes densifiées finement : la triangulation suit alors les lignes (lignes de rupture) au lieu de les traverser
+  let segL=0;for(const Ln of S.lines){if(off.has(String(Ln.pcode)))continue;for(let k=1;k<Ln.pts.length;k++){const a=S.rows[Ln.pts[k-1]],b=S.rows[Ln.pts[k]];if(!a||!b)continue;const [s1,o1]=loc(a.e,a.n),[s2,o2]=loc(b.e,b.n);if(inC(s1,o1)||inC(s2,o2))segL+=Math.hypot(b.e-a.e,b.n-a.n)}}
+  const step=Math.max(.2,segL/6000);
+  for(const Ln of S.lines){if(off.has(String(Ln.pcode)))continue;const ids=Ln.pts.slice();if(Ln.closed&&ids.length>2)ids.push(ids[0]);
+    for(let k=1;k<ids.length;k++){const a=S.rows[ids[k-1]],b=S.rows[ids[k]];if(!okRow(a)||!okRow(b))continue;
+      const d=Math.hypot(b.e-a.e,b.n-a.n),m=Math.floor(d/step);for(let q=1;q<m;q++){const f=q/m;const [s,o]=loc(a.e+(b.e-a.e)*f,a.n+(b.n-a.n)*f);add(s,o,a.z+(b.z-a.z)*f,false)}}}
+  if(nPts<3)return {err:'Moins de 3 points retenus entre les deux limites : élargissez la demi-largeur ou cochez d\'autres codes.'};
+  const tris=anaDelaunay(P).filter(([a,b,c])=>{const e1=Math.hypot(P[a][0]-P[b][0],P[a][1]-P[b][1]),e2=Math.hypot(P[b][0]-P[c][0],P[b][1]-P[c][1]),e3=Math.hypot(P[c][0]-P[a][0],P[c][1]-P[a][1]);
+    const ar=Math.abs((P[b][0]-P[a][0])*(P[c][1]-P[a][1])-(P[c][0]-P[a][0])*(P[b][1]-P[a][1]))/2;return Math.max(e1,e2,e3)<=mE&&ar>1e-4});
+  if(!tris.length)return {err:'Aucune surface : les points sont trop espacés pour la longueur maximale des triangles.'};
+  let omin=1e99,omax=-1e99;for(const t3 of tris)for(const i of t3){omin=Math.min(omin,P[i][1]);omax=Math.max(omax,P[i][1])}
+  let c=Math.max(.05,+t.cell||.2);while(Math.ceil(L/c)*Math.ceil((omax-omin)/c)>2.5e6)c*=1.25;
+  const nx=Math.max(2,Math.ceil(L/c)),oy0=Math.floor(omin/c)*c,ny=Math.max(2,Math.ceil((omax-oy0)/c)),N=nx*ny;
+  const G=new Float64Array(N).fill(NaN);
+  for(const [a,b,cI] of tris){const [ax,ay]=P[a],[bx,by]=P[b],[cx,cy]=P[cI];const den=(by-cy)*(ax-cx)+(cx-bx)*(ay-cy);if(Math.abs(den)<1e-12)continue;
+    const i0=Math.max(0,Math.floor(Math.min(ax,bx,cx)/c)),i1=Math.min(nx-1,Math.ceil(Math.max(ax,bx,cx)/c)),j0=Math.max(0,Math.floor((Math.min(ay,by,cy)-oy0)/c)),j1=Math.min(ny-1,Math.ceil((Math.max(ay,by,cy)-oy0)/c));
+    for(let j=j0;j<=j1;j++){const y=oy0+(j+.5)*c;for(let i=i0;i<=i1;i++){const x=(i+.5)*c;const l1=((by-cy)*(x-cx)+(cx-bx)*(y-cy))/den,l2=((cy-ay)*(x-cx)+(ax-cx)*(y-cy))/den,l3=1-l1-l2;
+      if(l1>=-1e-9&&l2>=-1e-9&&l3>=-1e-9)G[j*nx+i]=l1*Z[a]+l2*Z[b]+l3*Z[cI]}}}
+  // remplissage des dépressions (priority-flood). Sorties : les deux limites (lab 0) et les bords latéraux de la surface
+  // (lab 1 = côté +v, lab 2 = côté −v). Une cuvette dont le trop-plein part par un bord latéral = débordement possible.
+  const W=new Float64Array(N).fill(NaN),vis=new Uint8Array(N),lab=new Int8Array(N).fill(-1);const H=[];
+  const hp=(w,k)=>{H.push([w,k]);let i=H.length-1;while(i>0){const p=(i-1)>>1;if(H[p][0]<=H[i][0])break;[H[p],H[i]]=[H[i],H[p]];i=p}};
+  const hpop=()=>{const top=H[0],last=H.pop();if(H.length){H[0]=last;let i=0;for(;;){const l=2*i+1,r=l+1;let m=i;if(l<H.length&&H[l][0]<H[m][0])m=l;if(r<H.length&&H[r][0]<H[m][0])m=r;if(m===i)break;[H[m],H[i]]=[H[i],H[m]];i=m}}return top};
+  const outCol=i=>i<=1||i>=nx-2;let nEnd=0;
+  for(let k=0;k<N;k++){if(isNaN(G[k]))continue;const i=k%nx,j=(k-i)/nx;let L0=-1;
+    if(outCol(i)){L0=0;nEnd++}else{for(const [di,dj] of [[1,0],[-1,0],[0,1],[0,-1]]){const ii=i+di,jj=j+dj;if(jj<0||jj>=ny||isNaN(G[jj*nx+ii])){L0=oy0+(j+.5)*c>0?1:2;break}}}
+    if(L0>=0){vis[k]=1;W[k]=G[k];lab[k]=L0;hp(G[k]+(L0?1e-9:0),k)}}
+  if(!nEnd)return {err:'La surface ne touche pas les limites : touchez des points situés dans le fossé.'};
+  while(H.length){const [w,k]=hpop();const i=k%nx,j=(k-i)/nx;for(let dj=-1;dj<=1;dj++)for(let di=-1;di<=1;di++){if(!di&&!dj)continue;const ii=i+di,jj=j+dj;if(ii<0||jj<0||ii>=nx||jj>=ny)continue;const q=jj*nx+ii;if(vis[q]||isNaN(G[q]))continue;vis[q]=1;W[q]=Math.max(G[q],W[k]);lab[q]=lab[k];hp(W[q],q)}}
+  const dmin=.003,D=new Float32Array(N);for(let k=0;k<N;k++)D[k]=isNaN(G[k])||isNaN(W[k])?0:Math.max(0,W[k]-G[k]);
+  // cuvettes
+  const comp=new Int32Array(N).fill(-1),ponds=[];
+  for(let k0=0;k0<N;k0++){if(D[k0]<=dmin||comp[k0]>=0)continue;const id=ponds.length,st=[k0];comp[k0]=id;let n=0,vol=0,mxd=0,lev=-1e99,ss=0,so=0;const lc=[0,0,0];
+    while(st.length){const k=st.pop();const i=k%nx,j=(k-i)/nx;n++;vol+=D[k]*c*c;if(D[k]>mxd)mxd=D[k];lev=Math.max(lev,W[k]);ss+=(i+.5)*c;so+=oy0+(j+.5)*c;lc[lab[k]]++;
+      for(const [di,dj] of [[1,0],[-1,0],[0,1],[0,-1]]){const ii=i+di,jj=j+dj;if(ii<0||jj<0||ii>=nx||jj>=ny)continue;const q=jj*nx+ii;if(comp[q]<0&&D[q]>dmin){comp[q]=id;st.push(q)}}}
+    const L1=lc.indexOf(Math.max(...lc)),s=ss/n,o=so/n;
+    ponds.push({id,n,area:n*c*c,vol,maxD:mxd,level:lev,s,o,E:A.e+s*ux+o*vx,N:A.n+s*uy+o*vy,over:L1>0,side:L1===1?anaSide(vx,vy):L1===2?anaSide(-vx,-vy):null})}
+  const keep=ponds.filter(p=>p.vol>=(+t.minVol||.005)||p.maxD>=.01);const kid=new Set(keep.map(p=>p.id));
+  const mark=new Uint8Array(N);for(let k=0;k<N;k++)if(comp[k]>=0&&kid.has(comp[k]))mark[k]=ponds[comp[k]].over?2:1;
+  keep.sort((a,b)=>a.s-b.s);keep.forEach((p,k)=>p.no=k+1);
+  // profil du fond : points 65 FOF / 69 FOC si présents, sinon talweg de la surface
+  let prof=[],profSrc='';
+  const fof=S.rows.filter(r=>okRow(r)&&['65','69'].includes(String(parseDesc(r.desc).pcode))).map(r=>{const [s,o]=loc(r.e,r.n);return {s,o,z:r.z,name:r.name}}).filter(p=>p.s>=-.5&&p.s<=L+.5&&Math.abs(p.o)<=hw).sort((a,b)=>a.s-b.s);
+  if(fof.length>=3){prof=fof;profSrc='les points de fond de fossé (65 FOF / 69 FOC)'}
+  const thal=[];for(let i=0;i<nx;i++){let zb=1e99,wb=NaN;let mb=0;for(let j=0;j<ny;j++){const k=j*nx+i;if(!isNaN(G[k])&&G[k]<zb){zb=G[k];wb=W[k];mb=mark[k]}}if(zb<1e99)thal.push({s:(i+.5)*c,z:zb,w:wb,m:mb})}
+  if(!prof.length){const bin=Math.max(1,Math.round(1/c));for(let k=0;k<thal.length;k+=bin){const g=thal.slice(k,k+bin);const m=g.reduce((a,b)=>b.z<a.z?b:a);prof.push({s:m.s,z:m.z,name:''})}profSrc='le talweg de la surface (point le plus bas de chaque coupe)'}
+  const n=prof.length,ms=prof.reduce((a,p)=>a+p.s,0)/n,mz=prof.reduce((a,p)=>a+p.z,0)/n;let sxx=0,sxz=0;for(const p of prof){sxx+=(p.s-ms)**2;sxz+=(p.s-ms)*(p.z-mz)}
+  const reg=sxx?sxz/sxx:0;// m/m le long de A→B
+  const toB=reg<0,from=toB?A:B,to=toB?B:A;
+  const seq=toB?prof:prof.slice().reverse();const adv=[];let minSl=1e9,minAt=null;
+  for(let k=1;k<seq.length;k++){const a=seq[k-1],b=seq[k],ds=Math.abs(b.s-a.s);if(ds<.3)continue;const sl=(a.z-b.z)/ds;if(sl<minSl){minSl=sl;minAt=[a,b]}if(b.z-a.z>.01)adv.push({a,b,rise:b.z-a.z,len:ds})}
+  const dirx=toB?ux:-ux,diry=toB?uy:-uy;
+  return {A,B,L,ux,uy,vx,vy,c,nx,ny,oy0,omin,omax,G,W,D,mark,ponds:keep,prof,profSrc,thal,nPts,nTri:tris.length,P,tris,
+    flow:{from,to,toB,slope:-reg*(toB?1:-1)*100,dir:anaCompass(dirx,diry),zFrom:seq[0].z,zTo:seq[seq.length-1].z,minSl:minSl*100,minAt,adv},
+    vol:keep.reduce((a,p)=>a+p.vol,0),area:keep.reduce((a,p)=>a+p.area,0),nOver:keep.filter(p=>p.over).length,
+    sideL:anaSide(vx,vy),t:new Date().toLocaleString('fr-CA')};
+}
+function anaImage(R){const cvs=document.createElement('canvas');cvs.width=R.nx;cvs.height=R.ny;const g=cvs.getContext('2d');const im=g.createImageData(R.nx,R.ny);
+  for(let k=0;k<R.nx*R.ny;k++){const m=R.mark[k];if(!m)continue;const a=Math.min(235,90+R.D[k]*3000);const o=k*4;if(m===2){im.data[o]=235;im.data[o+1]=40;im.data[o+2]=40}else{im.data[o]=30;im.data[o+1]=150;im.data[o+2]=255}im.data[o+3]=a}
+  g.putImageData(im,0,0);return cvs}
+function anaW(R,s,o){return [R.A.e+s*R.ux+o*R.vx,R.A.n+s*R.uy+o*R.vy]}
+function anaDraw(){
+  const R=S.tool&&S.tool.kind==='ana'?S.tool.R:S.anaShow;if(!R||R.err)return;
+  ctx.save();
+  if(S.tool&&S.tool.showTin!==false){ctx.strokeStyle='rgba(255,196,64,.18)';ctx.lineWidth=.6;ctx.beginPath();for(const [a,b,c] of R.tris){const p=[a,b,c,a].map(i=>W2S(...anaW(R,R.P[i][0],R.P[i][1])));ctx.moveTo(...p[0]);for(let k=1;k<4;k++)ctx.lineTo(...p[k])}ctx.stroke()}
+  if(!R.img)R.img=anaImage(R);
+  const P0=W2S(...anaW(R,0,R.oy0)),P1=W2S(...anaW(R,R.nx*R.c,R.oy0)),P2=W2S(...anaW(R,0,R.oy0+R.ny*R.c));
+  ctx.save();ctx.imageSmoothingEnabled=false;ctx.transform((P1[0]-P0[0])/R.nx,(P1[1]-P0[1])/R.nx,(P2[0]-P0[0])/R.ny,(P2[1]-P0[1])/R.ny,P0[0],P0[1]);ctx.drawImage(R.img,0,0);ctx.restore();
+  ctx.setLineDash([6,4]);ctx.strokeStyle='#ffc440';ctx.lineWidth=2;for(const s of [0,R.L]){const a=W2S(...anaW(R,s,R.omin)),b=W2S(...anaW(R,s,R.omax));ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke()}ctx.setLineDash([]);
+  // flèche d'écoulement
+  const f=R.flow,s0=R.L*(f.toB?.3:.7),s1=R.L*(f.toB?.7:.3),oA=R.omax+Math.max(1.5,12/S.view.k);const a=W2S(...anaW(R,s0,oA)),b=W2S(...anaW(R,s1,oA));
+  ctx.strokeStyle='#3cc4ff';ctx.fillStyle='#3cc4ff';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke();
+  const an=Math.atan2(b[1]-a[1],b[0]-a[0]);ctx.beginPath();ctx.moveTo(...b);ctx.lineTo(b[0]-14*Math.cos(an-.45),b[1]-14*Math.sin(an-.45));ctx.lineTo(b[0]-14*Math.cos(an+.45),b[1]-14*Math.sin(an+.45));ctx.closePath();ctx.fill();
+  ctx.font='700 12px Barlow, sans-serif';ctx.fillText(`écoulement ${f.slope.toFixed(2)} %`,(a[0]+b[0])/2-40,(a[1]+b[1])/2-8);
+  ctx.font='600 11px "JetBrains Mono", monospace';for(const p of R.ponds){const [x,y]=W2S(p.E,p.N);ctx.fillStyle=p.over?'#ff6b6b':'#9fd8ff';ctx.fillText(`${p.no} · ${p.vol.toFixed(p.vol<.1?3:2)} m³`,x+6,y-6)}
+  ctx.restore();
+}
+function anaRun(t){t.R=anaCompute(t);t.R.img=null;}
+function anaRender(bar){
+  const t=S.tool,n=t.picks.map(i=>S.rows[i].name);bar.hidden=false;let msg='',extra='',ok=false;
+  if(n.length<2)msg=`<b>ANALYSE · Fossé</b> (eau accumulée, débordement, sens d'écoulement) : touchez le point de <b>${n.length?'fin':'début'}</b> du tronçon${n.length?` (début : <b class="mono">${esc(n[0])}</b>)`:''}, de préférence sur le fond de fossé.`;
+  else{const R=t.R;
+    if(R.err)msg=`<span style="color:var(--err)">${esc(R.err)}</span>`;
+    else{ok=true;const f=R.flow;
+      msg=`<b>Fossé ${esc(n[0])} → ${esc(n[1])}</b> · ${R.L.toFixed(1)} m · surface de ${R.nPts} points (${R.nTri} triangles)<br>
+      <b>Écoulement</b> vers ${f.dir} : ${esc(f.from.name)} → ${esc(f.to.name)}, pente moyenne <b>${f.slope.toFixed(2)} %</b>${f.adv.length?` · <span style="color:var(--warn)">${f.adv.length} contre-pente(s)</span>`:''}<br>
+      <b>Eau accumulée</b> : ${R.ponds.length?`<b>${R.vol.toFixed(R.vol<1?3:2)} m³</b> dans ${R.ponds.length} cuvette(s), ${R.area.toFixed(1)} m², profondeur max ${(Math.max(...R.ponds.map(p=>p.maxD))*100).toFixed(1)} cm`:'aucune cuvette'}<br>
+      <b>Débordement</b> : ${R.nOver?`<span style="color:var(--err)"><b>${R.nOver} cuvette(s) débordent</b> : trop-plein vers le côté ${[...new Set(R.ponds.filter(p=>p.over).map(p=>p.side))].join(', ')})</span>`:'<span style="color:var(--ok,#1a8f5a)">aucun</span>'}`;}
+    const codes=anaCodesIn(t);t.off=t.off||new Set();
+    extra=`<div class="tbrow" style="flex-wrap:wrap;gap:6px 14px"><label class="note">Demi-largeur (m) <input id="anHw" type="number" step="1" min="2" style="width:4.5em" value="${t.hw}"></label><label class="note">Maille (m) <input id="anC" type="number" step=".05" min=".05" style="width:4.5em" value="${t.cell}"></label><label class="note">Triangle max (m) <input id="anE" type="number" step=".5" min="1" style="width:4.5em" value="${t.maxEdge}"></label><label class="note"><input type="checkbox" id="anTin" ${t.showTin!==false?'checked':''}> voir la surface</label></div>
+    <details class="note" style="margin:4px 0"><summary>Codes retenus pour la surface (${codes.length-[...t.off].filter(k=>codes.some(c=>c[0]===k)).length}/${codes.length})</summary><div class="tbrow" style="flex-wrap:wrap;gap:2px 12px;max-height:9em;overflow:auto">${codes.map(([k,c])=>{const d=CODES.get(k);return `<label><input type="checkbox" class="anCode" value="${esc(k)}" ${t.off.has(k)?'':'checked'}> ${esc(k)} ${d?esc(d.abr):''} <span class="note">(${c})</span></label>`}).join('')}</div></details>`;}
+  bar.innerHTML=`<div class="tbmsg">${msg}</div>${extra}<div class="actions"><button class="btn sm primary" id="tbGo" type="button" ${ok?'':'disabled'}>Ajouter au rapport</button><button class="btn sm" id="tbReset" type="button">Recommencer</button><button class="btn sm" id="tbClose" type="button">Fermer</button></div>`;
+  const re=()=>{anaRun(t);toolRender();draw()};
+  if($('anHw')){$('anHw').onchange=e=>{t.hw=Math.max(2,+e.target.value||12);re()};$('anC').onchange=e=>{t.cell=Math.max(.05,+e.target.value||.2);re()};$('anE').onchange=e=>{t.maxEdge=Math.max(1,+e.target.value||6);re()};
+    $('anTin').onchange=e=>{t.showTin=e.target.checked;draw()};bar.querySelectorAll('.anCode').forEach(x=>x.onchange=()=>{x.checked?t.off.delete(x.value):t.off.add(x.value);re()})}
+  $('tbGo').onclick=()=>anaAdd(t);$('tbReset').onclick=()=>{t.picks=[];t.R=null;toolRender();draw()};$('tbClose').onclick=()=>{S.tool=null;toolRender();draw()};
+}
+/* Image du plan pour le rapport : dessin sur une toile à part (l'imagerie en ligne sans autorisation CORS est retirée de l'image) */
+function planShot(box,keepTool){
+  const v0=S.view,sel=S.sel,hl=S.hl,tool=S.tool,ctx0=ctx;let url=null,noBg=false;
+  if(box){const pad=Math.max(4,(box[2]-box[0])*.06);fitBox(box[0]-pad,box[1]-pad,box[2]+pad,box[3]+pad,5)}
+  S.sel=null;S.hl=null;if(!keepTool)S.tool=null;
+  let crop=null;if(box){const cs=[[box[0],box[1]],[box[2],box[1]],[box[0],box[3]],[box[2],box[3]]].map(([x,y])=>W2S(x,y));const m=36;crop=[Math.max(0,Math.min(...cs.map(c=>c[0]))-m),Math.max(0,Math.min(...cs.map(c=>c[1]))-m-24),Math.min(S.W,Math.max(...cs.map(c=>c[0]))+m),Math.min(S.H,Math.max(...cs.map(c=>c[1]))+m)];if(crop[3]-crop[1]<S.H*.45){const cy=(crop[1]+crop[3])/2,h=S.H*.45;crop[1]=Math.max(0,cy-h/2);crop[3]=Math.min(S.H,cy+h/2)}}
+  const one=bg=>{const c=document.createElement('canvas');c.width=Math.round(S.W*2);c.height=Math.round(S.H*2);ctx=c.getContext('2d');ctx.setTransform(2,0,0,2,0,0);const b0=BG.src;if(!bg)BG.src='none';try{draw()}finally{BG.src=b0}
+    if(crop){const o=document.createElement('canvas');o.width=Math.round((crop[2]-crop[0])*2);o.height=Math.round((crop[3]-crop[1])*2);o.getContext('2d').drawImage(c,crop[0]*2,crop[1]*2,o.width,o.height,0,0,o.width,o.height);return o.toDataURL('image/jpeg',.86)}
+    return c.toDataURL('image/jpeg',.86)};
+  try{try{url=one(true)}catch(e){noBg=true;url=one(false)}}catch(e){url=null}
+  finally{ctx=ctx0;S.view=v0;S.sel=sel;S.hl=hl;S.tool=tool;draw()}
+  return url&&{url,noBg:noBg&&BG.src!=='none',w:S.W,h:S.H};
+}
+function anaSvg(R){
+  const W=900,H=230,ml=58,mr=12,mt=14,mb=34;const pr=R.prof,th=R.thal;
+  let z0=Math.min(...th.map(p=>p.z),...pr.map(p=>p.z)),z1=Math.max(...th.map(p=>isNaN(p.w)?p.z:p.w),...pr.map(p=>p.z));const dz=Math.max(.05,z1-z0);z0-=dz*.12;z1+=dz*.18;
+  const X=s=>ml+s/R.L*(W-ml-mr),Y=z=>mt+(z1-z)/(z1-z0)*(H-mt-mb);
+  let water='';let run=[];const flush=()=>{if(run.length>1)water+=`<path d="M${run.map(p=>X(p.s).toFixed(1)+','+Y(p.w).toFixed(1)).join('L')}L${run.slice().reverse().map(p=>X(p.s).toFixed(1)+','+Y(p.z).toFixed(1)).join('L')}Z" fill="${run.some(p=>p.m===2)?'#e5484d':'#3c9bff'}" fill-opacity=".55"/>`;run=[]};
+  for(const p of th){if(p.m&&!isNaN(p.w)&&p.w-p.z>.003)run.push(p);else flush()}flush();
+  const gr=[];const st=[.01,.02,.05,.1,.2,.5,1,2,5].find(v=>(z1-z0)/v<=6)||5;for(let z=Math.ceil(z0/st)*st;z<=z1;z+=st)gr.push(`<line x1="${ml}" x2="${W-mr}" y1="${Y(z).toFixed(1)}" y2="${Y(z).toFixed(1)}" stroke="#e2e8ea"/><text x="${ml-6}" y="${(Y(z)+4).toFixed(1)}" text-anchor="end" font-size="10" fill="#5d6b73">${z.toFixed(st<.1?2:1)}</text>`);
+  const ss=[1,2,5,10,20,25,50,100,200,500].find(v=>R.L/v<=10)||1000;for(let s=0;s<=R.L+1e-6;s+=ss)gr.push(`<line x1="${X(s).toFixed(1)}" x2="${X(s).toFixed(1)}" y1="${mt}" y2="${H-mb}" stroke="#eef2f3"/><text x="${X(s).toFixed(1)}" y="${H-mb+14}" text-anchor="middle" font-size="10" fill="#5d6b73">${s}</text>`);
+  const line=`<path d="M${th.map(p=>X(p.s).toFixed(1)+','+Y(p.z).toFixed(1)).join('L')}" fill="none" stroke="#7b8a92" stroke-width="1"/>`;
+  const pts=R.profSrc.startsWith('les points')?`<path d="M${pr.map(p=>X(Math.max(0,Math.min(R.L,p.s))).toFixed(1)+','+Y(p.z).toFixed(1)).join('L')}" fill="none" stroke="#0e6f66" stroke-width="1.8"/>`+pr.map(p=>`<circle cx="${X(Math.max(0,Math.min(R.L,p.s))).toFixed(1)}" cy="${Y(p.z).toFixed(1)}" r="2.4" fill="#0e6f66"/>`).join(''):'';
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Profil du fond de fossé" style="max-width:${W}px;font-family:Segoe UI,Arial,sans-serif">${gr.join('')}${water}${line}${pts}
+  <text x="${ml}" y="${H-4}" font-size="10" fill="#5d6b73">${esc(R.A.name)} (0 m)</text><text x="${W-mr}" y="${H-4}" font-size="10" text-anchor="end" fill="#5d6b73">${esc(R.B.name)} (${R.L.toFixed(1)} m)</text>
+  <text x="${(ml+W-mr)/2}" y="${H-4}" font-size="10" text-anchor="middle" fill="#5d6b73">chaînage (m) · élévation (m), exagération verticale</text></svg>`;
+}
+async function anaAdd(t){
+  const R=t.R;if(!R||R.err)return;toast('Préparation de l\'image du tronçon…');
+  let x0=1e99,y0=1e99,x1=-1e99,y1=-1e99;for(const s of [0,R.L])for(const o of [R.omin,R.omax]){const [x,y]=anaW(R,s,o);x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y)}
+  const v0=S.view;const pad=Math.max(4,(x1-x0)*.06);fitBox(x0-pad,y0-pad,x1+pad,y1+pad,5);draw();await new Promise(r=>setTimeout(r,1500));S.view=v0;
+  const shot=planShot([x0,y0,x1,y1],true);
+  S.anas=S.anas||[];S.anas.push({kind:'fosse',R:{A:{name:R.A.name,z:R.A.z},B:{name:R.B.name,z:R.B.z},L:R.L,nPts:R.nPts,nTri:R.nTri,c:R.c,vol:R.vol,area:R.area,nOver:R.nOver,ponds:R.ponds,flow:{...R.flow,from:{name:R.flow.from.name},to:{name:R.flow.to.name}},profSrc:R.profSrc,t:R.t,hw:t.hw,maxEdge:t.maxEdge,off:[...(t.off||[])]},svg:anaSvg(R),shot});
+  S.journal.push({name:`${R.A.name} → ${R.B.name}`,before:'',after:'',why:`Analyse de fossé ajoutée au rapport : ${R.vol.toFixed(3)} m³ d'eau accumulée, écoulement vers ${R.flow.dir} (${R.flow.slope.toFixed(2)} %), ${R.nOver} débordement(s)`,t:new Date().toLocaleString('fr-CA')});
+  toast(`Analyse ajoutée au rapport (${S.anas.length}).`);draw();
+}
+function anaReportSec(e,sec,tbl){
+  if(!(S.anas||[]).length)return '';
+  return sec('Analyses',S.anas.map((a,k)=>{const R=a.R,f=R.flow;
+    const pt=R.ponds.map(p=>`<tr${p.over?' class="out"':''}><td>${p.no}</td><td>${p.s.toFixed(1)}</td><td class="m">${p.E.toFixed(2)}</td><td class="m">${p.N.toFixed(2)}</td><td>${p.area.toFixed(2)}</td><td><b>${p.vol.toFixed(3)}</b></td><td>${(p.maxD*100).toFixed(1)}</td><td>${p.level.toFixed(3)}</td><td>${p.over?'<b>oui</b>, côté '+e(p.side):'non'}</td></tr>`);
+    return `<h3>${k+1}. Fossé ${e(R.A.name)} → ${e(R.B.name)} <span class="sub">${R.L.toFixed(1)} m · ${e(R.t)}</span></h3>
+<div class="tiles"><div class="tile"><b>${R.vol.toFixed(R.vol<1?3:2)}</b><span>m³ d'eau accumulée</span></div><div class="tile"><b>${R.ponds.length}</b><span>cuvettes</span></div><div class="tile"><b>${f.slope.toFixed(2)} %</b><span>pente moyenne</span></div><div class="tile ${R.nOver?'err':''}"><b>${R.nOver}</b><span>débordements possibles</span></div></div>
+<p><b>Sens d'écoulement général :</b> vers ${e(f.dir)}, de ${e(f.from.name)} (Z ${f.zFrom.toFixed(3)}) à ${e(f.to.name)} (Z ${f.zTo.toFixed(3)}). Pente moyenne ${f.slope.toFixed(2)} % (droite ajustée sur ${e(R.profSrc)})${f.minAt?` ; pente la plus faible ${f.minSl.toFixed(2)} % entre ${f.minAt[0].s.toFixed(1)} et ${f.minAt[1].s.toFixed(1)} m`:''}.${f.adv.length?` <b style="color:#a86400">${f.adv.length} contre-pente(s)</b> de plus de 1 cm : ${f.adv.map(x=>`${x.a.s.toFixed(1)}–${x.b.s.toFixed(1)} m (+${(x.rise*100).toFixed(1)} cm)`).join(', ')}.`:''}</p>
+${a.shot?`<figure style="margin:8px 0"><img src="${a.shot.url}" alt="Plan du tronçon analysé" style="width:100%;border:1px solid #d5dde1;border-radius:4px"><figcaption class="note">En bleu : eau accumulée (plus foncé = plus profond) · en rouge : cuvette dont le trop-plein sort par le côté du fossé (débordement) · tirets jaunes : limites du tronçon · flèche : sens d'écoulement.${a.shot.noBg?' Fond de plan non inclus (le serveur d\'imagerie ne permet pas la copie).':''}</figcaption></figure>`:''}
+<h3 class="note">Profil du fond</h3>${a.svg}
+<h3 class="note">Cuvettes (eau qui ne s'écoule pas vers les limites)</h3>${tbl(['No','Chaînage (m)','E','N','Surface (m²)','Volume (m³)','Prof. max (cm)','Niveau d\'eau','Débordement'],pt,'small')}
+<p class="note">Surface : ${R.nPts} points et les lignes du levé (densifiées), ${R.nTri} triangles de ${R.maxEdge} m au plus, sur ${R.hw} m de part et d'autre de la droite ${e(R.A.name)}–${e(R.B.name)}${R.off.length?` ; codes exclus : ${R.off.map(e).join(', ')}`:''}. Maille de calcul ${R.c.toFixed(2)} m. L'eau peut sortir aux deux limites ; les cuvettes de moins de 5 L et 1 cm sont ignorées. Résultats indicatifs, à confirmer dans Civil 3D au besoin.</p>`}).join(''));
+}
+function repPlanSec(e,sec){
+  if(!S.view||!S.rows.length)return '';const sh=planShot(null);if(!sh)return '';
+  return sec('Vue du levé',`<figure style="margin:0"><img src="${sh.url}" alt="Vue du levé" style="width:100%;border:1px solid #d5dde1;border-radius:4px"><figcaption class="note">Vue du plan telle qu'affichée dans l'application au moment du rapport.${sh.noBg?' Fond de plan non inclus (le serveur d\'imagerie ne permet pas la copie).':''}</figcaption></figure>`);
+}
+
 function toolPick(i){
   const t=S.tool,k=t.picks.indexOf(i);
   if(S.rows[i]&&S.rows[i].del&&k<0){toast(`Le point ${S.rows[i].name} est effacé : rétablissez-le d'abord (fiche du point).`);return}
   if(t.kind==='hi'&&k<0){t.excl=t.excl||new Set();const r=S.rows[i];if(t.excl.has(r)){t.excl.delete(r);toolRender();draw();return}if(hiSel(t).includes(r)){t.excl.add(r);toolRender();draw();return}}
   if(k>=0)t.picks.splice(k,1);
-  else{const max=t.kind==='hi'?1e9:(t.kind==='swap'||t.kind==='close'||t.kind==='link'||t.kind==='cut'||t.kind==='join')?2:t.kind==='rev'?1:(CMD_NEED[t.kind]&&t.kind!=='RECT')?CMD_NEED[t.kind]:3;if(t.kind==='rev')t.line=null;if(t.picks.length>=max)t.picks=[];t.picks.push(i);}
+  else{const max=t.kind==='hi'?1e9:(t.kind==='swap'||t.kind==='close'||t.kind==='link'||t.kind==='cut'||t.kind==='join'||t.kind==='ana')?2:t.kind==='rev'?1:(CMD_NEED[t.kind]&&t.kind!=='RECT')?CMD_NEED[t.kind]:3;if(t.kind==='rev')t.line=null;if(t.picks.length>=max)t.picks=[];t.picks.push(i);}
   // LIER en continu : une seule liaison possible → appliquée d'office, le point touché devient le départ de la suivante
+  if(t.kind==='ana'){t.R=null;if(t.picks.length===2)anaRun(t)}
   if(t.kind==='link'&&t.lc&&t.picks.length===2){linkWithCode(t);return}
   if(t.kind==='link'&&t.picks.length===2){const [a,b]=t.picks;const opts=linkOptions(a,b);
     if(opts.length===1){opts[0].fn();S.tool={kind:'link',picks:[b],chain:true};toolRender();draw();return}}
   toolRender();draw();
 }
-const TOOLS=[['tSwap','swap'],['tRev','rev'],['tClose','close'],['tLink','link'],['tCut','cut'],['tJoin','join'],['tHi','hi'],['tRect','rect'],['t2P','2P'],['t2PD','2PD'],['t2D','2D'],['t3PP','3PP'],['t4P','4P'],['t3C','3C']];
+const TOOLS=[['tSwap','swap'],['tRev','rev'],['tClose','close'],['tLink','link'],['tCut','cut'],['tJoin','join'],['tHi','hi'],['tRect','rect'],['t2P','2P'],['t2PD','2PD'],['t2D','2D'],['t3PP','3PP'],['t4P','4P'],['t3C','3C'],['tAna','ana']];
 for(const [id,k] of TOOLS)$(id).onclick=()=>toolStart(k);
 const CALC_HELP={'2P':['1er point','2e point'],'2PD':['point 1','point 2'],'2D':['point 1','point 2'],'3PP':['1er point du segment','2e point du segment','point 3 (à projeter)'],'4P':['point 1 (droite 1-2)','point 2','point 3 (droite 3-4)','point 4'],'3C':['1er point du cercle','2e point','3e point']};
 const CALC_NAME={'2P':'Point milieu','2PD':'Point à une distance','2D':'Intersection de 2 distances','3PP':'Perpendiculaire','4P':'Intersection de 2 droites','3C':'Centre du cercle'};
@@ -2241,6 +2432,7 @@ function draw(){
   ctx.stroke();
   const selL=(S.tool?.kind==='close'||S.tool?.kind==='link'||S.tool?.kind==='cut')&&S.tool.opts&&S.tool.opts[S.tool.opt]?S.tool.opts[S.tool.opt].line:S.tool?.kind==='rev'&&S.tool.line?S.tool.line:(S.sel!=null?S.lineOf.get(S.sel):null);
   S.lines.forEach((L,k)=>{const v=S.verts[k];ctx.strokeStyle=colOfCode(L.pcode);ctx.lineWidth=L===selL?3:1.4;ctx.beginPath();v.forEach((p,j)=>{const [x,y]=W2S(p[0],p[1]);j?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke();});
+  try{anaDraw()}catch(e){console.error(e)}
   // points
   const showInfo=$('fInfo').checked;
   const lab=S.view.k>6;ctx.font='11px "JetBrains Mono", monospace';
@@ -2494,6 +2686,8 @@ ${sec('Sommaire',`<div class="tiles">
 <div class="tile ${n.err?'err':''}"><b>${n.err}</b><span>erreurs restantes</span></div>
 <div class="tile ${n.warn?'warn':''}"><b>${n.warn}</b><span>avertissements</span></div>
 </div>`)}
+${repPlanSec(e,sec)}
+${anaReportSec(e,sec,tbl)}
 ${gnss.length?sec('Qualité GNSS',`<div class="grid">
 ${kv('Statut des solutions',Object.entries(st).map(([k,v])=>`${e(k)} : ${v}`).join(' · '))}
 ${kv('RMS horizontal (m)',lat.length?`moyenne ${avg(lat).toFixed(3)} · max ${mx(lat).toFixed(3)}`:null,`tolérance ${tolH.toFixed(3)}`)}
@@ -2676,8 +2870,9 @@ function drawBg(){
   const x0=Math.floor(Math.min(...cs.map(c=>tx(c[1])))),x1=Math.floor(Math.max(...cs.map(c=>tx(c[1])))),y0=Math.floor(Math.min(...cs.map(c=>ty(c[0])))),y1=Math.floor(Math.max(...cs.map(c=>ty(c[0]))));
   if((x1-x0+1)*(y1-y0+1)>120){ctx.restore();return}
   for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++){const key=`${BG.src}/${z}/${x}/${y}`;let t=BG.tiles.get(key);
-    if(!t){const img=new Image();t={img,ok:false,bad:false};BG.tiles.set(key,t);img.onload=()=>{t.ok=true;BG.ok++;draw()};img.onerror=()=>{t.bad=true;BG.fail++;bgStat()};
-      img.src=url.replace('{z}',z).replace('{x}',x).replace('{y}',y);if(BG.tiles.size>600){const k0=BG.tiles.keys().next().value;BG.tiles.delete(k0)}}
+    if(!t){const img=new Image();t={img,ok:false,bad:false};BG.tiles.set(key,t);const src=url.replace('{z}',z).replace('{x}',x).replace('{y}',y);img.crossOrigin='anonymous';img.onload=()=>{t.ok=true;BG.ok++;draw()};
+      img.onerror=()=>{if(img.crossOrigin){const i2=new Image();t.img=i2;i2.onload=img.onload;i2.onerror=()=>{t.bad=true;BG.fail++;bgStat()};i2.src=src;return}t.bad=true;BG.fail++;bgStat()};
+      img.src=src;if(BG.tiles.size>600){const k0=BG.tiles.keys().next().value;BG.tiles.delete(k0)}}
     if(!t.ok)continue;const m=(px,py)=>{const [E,N]=TM.fwd(lat(py),lon(px),z0);return toS(E,N)};
     affine(t.img,t.img.naturalWidth||256,t.img.naturalHeight||256,m(x,y),m(x+1,y),m(x,y+1));}
   ctx.restore()}
