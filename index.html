@@ -356,7 +356,7 @@ tr.hion td{background:color-mix(in srgb,#ffc440 18%,transparent)}
             <code>_</code><span>Liaison multiple sur un même point : <code>526 1.2_2.1</code> ferme le string 1 et débute le string 2 ; <code>181 1_186 1.1</code> continue le 181 et débute le 186 (double Pcode). Autant de liaisons que voulu.</span>
           </div>
           <p class="note">Format lu&nbsp;: <code>Matricule,Est,Nord,Élév,Description</code> où la description est <code>Pcode String.Contrôle [attributs]</code>, ex. <code>526 1.1</code>. Le fichier _modif est toujours écrit au format <code>P,N,E,Z,D</code> (Point, Nord, Est, Élév., Description), sans ligne d'en-tête, quel que soit le format lu. Il contient les descriptions corrigées, les coordonnées des points inversés et les points calculés (rectangle), insérés juste après le dernier point de leur ligne.</p>
-          <p class="note">Version v9.6.6-2026-11-03 · fonctionne hors ligne une fois ouverte · les fichiers restent sur l'appareil.</p>
+          <p class="note">Version v9.7-2026-11-03 · fonctionne hors ligne une fois ouverte · les fichiers restent sur l'appareil.</p>
           <div class="actions"><button class="btn sm" id="bJournal" type="button" disabled>Exporter le journal des corrections (.csv)</button><button class="btn sm" id="bResetLay" type="button">Rétablir les couches du gabarit</button></div>
         </div>
       </div>
@@ -400,6 +400,8 @@ tr.hion td{background:color-mix(in srgb,#ffc440 18%,transparent)}
   <div class="sheetbox wide" role="dialog" aria-labelledby="repTitle">
     <h2 id="repTitle">Rapport de levé</h2>
     <iframe id="repFrame" title="Aperçu du rapport"></iframe>
+    <div class="actions" style="justify-content:flex-start"><label class="btn filebtn">Ajouter des photos du terrain…<input type="file" id="phIn" accept="image/*" multiple></label><span class="note" id="phN"></span></div>
+    <div id="phList" style="display:flex;gap:8px;flex-wrap:wrap;max-height:9.5em;overflow:auto"></div>
     <div class="actions"><button class="btn primary" id="repSave" type="button">Enregistrer _rapport.html</button><button class="btn" id="repPrint" type="button">Imprimer / PDF</button><button class="btn" id="repClose" type="button">Fermer</button></div>
   </div>
 </div>
@@ -1344,7 +1346,7 @@ function load(text,name){
   if(!ok){toast(`${name} ne ressemble pas à un levé : attendu Matricule,Est,Nord,Élév,Description.`);return false}
   S.tool=null;if($('toolbar'))toolRender();
   F.rows.forEach((r,k)=>r.k0=k);S.srcText=text;S.sessKey=sessKeyOf(name,text);S.sessPending=null;$('sessBar').hidden=true;
-  S.F=F;S.rows=F.rows;S.fileName=name;S.cm=null;S.hl=null;$('cmSheet').hidden=true;S.enc=S.nextEnc||'windows-1252';S.nextEnc=null;S.hist=[];S.sel=null;S.cur=-1;S.journal=[];S.anas=[];
+  S.F=F;S.rows=F.rows;S.fileName=name;S.cm=null;S.hl=null;$('cmSheet').hidden=true;S.enc=S.nextEnc||'windows-1252';S.nextEnc=null;S.hist=[];S.sel=null;S.cur=-1;S.journal=[];S.anas=[];if(!S.restoring)S.photos=[];
   const tNow=new Date().toLocaleString('fr-CA');
   for(const x of (F.leica&&F.leica.notes)||[]) S.journal.push({name:x.name,before:'',after:'',why:x.why,t:tNow});
   for(const x of F.renamed||[]) S.journal.push({name:x.name,before:`${x.old} · ${x.before}`,after:x.after,why:x.keep?`Nom non numérique ${x.old} (fichier d'un logiciel ou d'un tiers) renuméroté ${x.name} pour Civil 3D ; description conservée`:`Point d'implantation / contrôle ${x.old} renuméroté ${x.name} (nom non numérique refusé par Civil 3D) ; no du monument en description`,t:tNow});
@@ -1508,13 +1510,13 @@ function sessEntry(force){
 }
 /* Fichier de séance : même contenu que la sauvegarde automatique + analyses ajoutées au rapport */
 function sessFileName(){return S.fileName.replace(/\.[^.]+$/,'')+'_seance.json'}
-function sessDoc(){const ent=sessEntry(true);return ent&&Object.assign({type:'validation-leve-seance',v:1,app:'v9.6',saved:new Date().toISOString()},ent,{anas:S.anas||[]})}
+function sessDoc(){const ent=sessEntry(true);return ent&&Object.assign({type:'validation-leve-seance',v:1,app:'v9.7',saved:new Date().toISOString()},ent,{anas:S.anas||[],photos:S.photos||[]})}
 $('bSess').onclick=()=>{if(!S.F)return;const doc=sessDoc(),ent=doc;
   const nm=sessFileName();save(nm,new Blob([JSON.stringify(doc)],{type:'application/json'}));
   S.journal.push({name:'Séance',before:'',after:nm,why:`Séance d'édition enregistrée dans ${nm} (${ent.n} point(s) corrigé(s))`,t:new Date().toLocaleString('fr-CA')});};
 function sessFromFile(txt,fname){let d;try{d=JSON.parse(txt)}catch(e){return false}
   if(!d||d.type!=='validation-leve-seance'||!d.text||!Array.isArray(d.rows)){return false}
-  sessRestore(d);S.anas=Array.isArray(d.anas)?d.anas:[];
+  sessRestore(d);S.anas=Array.isArray(d.anas)?d.anas:[];S.photos=Array.isArray(d.photos)?d.photos:[];
   toast(`Séance reprise depuis ${fname} : ${d.n||0} point(s) corrigé(s), enregistrée le ${new Date(d.t||d.saved).toLocaleString('fr-CA')}${S.anas.length?` · ${S.anas.length} analyse(s)`:''}. Vous reprenez où vous en étiez.`);
   return true}
 function sessRestore(ent){
@@ -2376,7 +2378,8 @@ function anaSvg(R){
   const W=900,H=244,ml=58,mr=22,mt=28,mb=34;const pr=R.prof,th=R.thal;
   const bords=(R.slopes||[]).filter(x=>!x.centre),bz=bords.flatMap(x=>x.ps.map(q=>q.z));
   let z0=Math.min(...th.map(p=>p.z),...pr.map(p=>p.z),...bz),z1=Math.max(...th.map(p=>isNaN(p.w)?p.z:p.w),...pr.map(p=>p.z),...bz);const dz=Math.max(.05,z1-z0);z0-=dz*.12;z1+=dz*.18;
-  const X=s=>ml+s/R.L*(W-ml-mr),Y=z=>mt+(z1-z)/(z1-z0)*(H-mt-mb);
+  const rev=R.rev!=null?R.rev:(R.ux!=null&&R.ux<0);// A à l'est de B : point 1 à droite, comme sur le plan
+  const X=s=>ml+(rev?R.L-s:s)/R.L*(W-ml-mr),Y=z=>mt+(z1-z)/(z1-z0)*(H-mt-mb);
   let water='';let run=[];const flush=()=>{if(run.length>1)water+=`<path d="M${run.map(p=>X(p.s).toFixed(1)+','+Y(p.w).toFixed(1)).join('L')}L${run.slice().reverse().map(p=>X(p.s).toFixed(1)+','+Y(p.z).toFixed(1)).join('L')}Z" fill="${run.some(p=>p.m===2)?'#e5484d':'#3c9bff'}" fill-opacity=".55"/>`;run=[]};
   for(const p of th){if(p.m&&!isNaN(p.w)&&p.w-p.z>.003)run.push(p);else flush()}flush();
   const gr=[];const st=[.01,.02,.05,.1,.2,.5,1,2,5].find(v=>(z1-z0)/v<=6)||5;for(let z=Math.ceil(z0/st)*st;z<=z1;z+=st)gr.push(`<line x1="${ml}" x2="${W-mr}" y1="${Y(z).toFixed(1)}" y2="${Y(z).toFixed(1)}" stroke="#e2e8ea"/><text x="${ml-6}" y="${(Y(z)+4).toFixed(1)}" text-anchor="end" font-size="10" fill="#5d6b73">${z.toFixed(st<.1?2:1)}</text>`);
@@ -2389,10 +2392,10 @@ function anaSvg(R){
   const leg=(R.slopes||[]).length>1?`<div style="font-size:11px;color:#5d6b73;display:flex;flex-wrap:wrap;gap:4px 14px;margin:2px 0 0 ${ml}px"><span><b style="color:#0e6f66">━</b> centre ${esc((R.slopes.find(x=>x.centre)||{}).label||'')} : ${((R.slopes.find(x=>x.centre)||{}).slope||0).toFixed(2)} %</span>${bords.map((x,k)=>`<span><b style="color:${BC[k%4]}">┅</b> bord ${esc(x.side)} ${esc(x.label)} : ${x.slope.toFixed(2)} %</span>`).join('')}<span><b style="color:#6b7780">╌</b> pente moyenne ${R.avgSlope.toFixed(2)} %</span><span><b style="color:#3c9bff">■</b> eau accumulée</span></div>`:'';
   // repères 1 et 2 (comme sur le plan) et flèche du sens d'écoulement
   const mk=(x,n)=>`<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${mt}" y2="${H-mb}" stroke="#e0a800" stroke-width="1" stroke-dasharray="3 3"/><circle cx="${x.toFixed(1)}" cy="${mt-12}" r="10" fill="#ffc440" stroke="#14191d" stroke-width="1"/><text x="${x.toFixed(1)}" y="${mt-8}" text-anchor="middle" font-size="12" font-weight="700" fill="#14191d">${n}</text>`;
-  const fl=R.flow||{},xa=X(R.L*(fl.toB?.35:.65)),xb=X(R.L*(fl.toB?.65:.35)),ya=mt-12,hd=fl.toB?-1:1;
+  const fl=R.flow||{},xa=X(R.L*(fl.toB?.35:.65)),xb=X(R.L*(fl.toB?.65:.35)),ya=mt-12,hd=xb>xa?-1:1;
   const arrow=`<line x1="${xa.toFixed(1)}" x2="${xb.toFixed(1)}" y1="${ya}" y2="${ya}" stroke="#1e88e5" stroke-width="2.5"/><path d="M${xb.toFixed(1)},${ya}l${(9*hd).toFixed(1)},-5v10z" fill="#1e88e5"/><text x="${((xa+xb)/2).toFixed(1)}" y="${ya-5}" text-anchor="middle" font-size="11" font-weight="600" fill="#1e88e5">écoulement ${fl.slope!=null?fl.slope.toFixed(2)+' %':''}</text>`;
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Profil du fond de fossé" style="max-width:${W}px;font-family:Segoe UI,Arial,sans-serif">${gr.join('')}${water}${line}${bl}${avl}${pts}${mk(X(0),1)}${mk(X(R.L),2)}${arrow}
-  <text x="${ml}" y="${H-4}" font-size="10" fill="#5d6b73">${esc(R.A.name)} (0 m)</text><text x="${W-mr}" y="${H-4}" font-size="10" text-anchor="end" fill="#5d6b73">${esc(R.B.name)} (${R.L.toFixed(1)} m)</text>
+  <text x="${rev?W-mr:ml}" y="${H-4}" font-size="10" ${rev?'text-anchor="end"':''} fill="#5d6b73">1 · ${esc(R.A.name)} (0 m)</text><text x="${rev?ml:W-mr}" y="${H-4}" font-size="10" ${rev?'':'text-anchor="end"'} fill="#5d6b73">2 · ${esc(R.B.name)} (${R.L.toFixed(1)} m)</text>
   <text x="${(ml+W-mr)/2}" y="${H-4}" font-size="10" text-anchor="middle" fill="#5d6b73">chaînage (m) · élévation (m), exagération verticale</text></svg>${leg}`;
 }
 async function anaAdd(t){
@@ -2400,7 +2403,7 @@ async function anaAdd(t){
   let x0=1e99,y0=1e99,x1=-1e99,y1=-1e99;for(const s of [0,R.L])for(const o of [R.omin,R.omax]){const [x,y]=anaW(R,s,o);x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y)}
   const v0=S.view;const pad=Math.max(4,(x1-x0)*.06);fitBox(x0-pad,y0-pad,x1+pad,y1+pad,5);draw();await new Promise(r=>setTimeout(r,1500));S.view=v0;
   const shot=planShot([x0,y0,x1,y1],true);
-  S.anas=S.anas||[];S.anas.push({kind:'fosse',R:{A:{name:R.A.name,z:R.A.z},B:{name:R.B.name,z:R.B.z},L:R.L,nPts:R.nPts,nTri:R.nTri,c:R.c,vol:R.vol,area:R.area,nOver:R.nOver,ponds:R.ponds,flow:{...R.flow,from:{name:R.flow.from.name},to:{name:R.flow.to.name}},profSrc:R.profSrc,t:R.t,limN:R.limN,slopes:(R.slopes||[]).map(x=>({label:x.label,side:x.side,centre:x.centre,slope:x.slope})),avgSlope:R.avgSlope,lims:anaLinesIn(t).filter(l=>(t.lim||new Set()).has(l.key)).map(l=>{const d=CODES.get(l.pc);return `${l.pc}${d?' '+d.abr:''} / ${l.str} (côté ${l.side})`}).concat(t.fp&&t.fp.length>=2?[`frontière par points ${t.fp.map(i=>S.rows[i].name).join(', ')}`]:[]),hw:t.hw,maxEdge:t.maxEdge,off:(()=>{const pres=new Set(anaCodesIn(t).map(c=>c[0]));return [...(t.off||[])].filter(k=>pres.has(k)).map(k=>{const d=CODES.get(k);return d?k+' '+d.abr:k})})()},svg:anaSvg(R),shot});
+  S.anas=S.anas||[];S.anas.push({kind:'fosse',R:{rev:R.ux<0,A:{name:R.A.name,z:R.A.z},B:{name:R.B.name,z:R.B.z},L:R.L,nPts:R.nPts,nTri:R.nTri,c:R.c,vol:R.vol,area:R.area,nOver:R.nOver,ponds:R.ponds,flow:{...R.flow,from:{name:R.flow.from.name},to:{name:R.flow.to.name}},profSrc:R.profSrc,t:R.t,limN:R.limN,slopes:(R.slopes||[]).map(x=>({label:x.label,side:x.side,centre:x.centre,slope:x.slope})),avgSlope:R.avgSlope,lims:anaLinesIn(t).filter(l=>(t.lim||new Set()).has(l.key)).map(l=>{const d=CODES.get(l.pc);return `${l.pc}${d?' '+d.abr:''} / ${l.str} (côté ${l.side})`}).concat(t.fp&&t.fp.length>=2?[`frontière par points ${t.fp.map(i=>S.rows[i].name).join(', ')}`]:[]),hw:t.hw,maxEdge:t.maxEdge,off:(()=>{const pres=new Set(anaCodesIn(t).map(c=>c[0]));return [...(t.off||[])].filter(k=>pres.has(k)).map(k=>{const d=CODES.get(k);return d?k+' '+d.abr:k})})()},svg:anaSvg(R),shot});
   S.journal.push({name:`${R.A.name} → ${R.B.name}`,before:'',after:'',why:`Analyse de fossé ajoutée au rapport : ${R.vol.toFixed(3)} m³ d'eau accumulée, écoulement vers ${R.flow.dir} (${R.flow.slope.toFixed(2)} %), ${R.nOver} débordement(s)`,t:new Date().toLocaleString('fr-CA')});
   toast(`Analyse ajoutée au rapport (${S.anas.length}).`);draw();
 }
@@ -2410,14 +2413,22 @@ function anaReportSec(e,sec,tbl){
     const pt=R.ponds.map(p=>`<tr${p.over?' class="out"':''}><td>${p.no}</td><td>${p.s.toFixed(1)}</td><td class="m">${p.E.toFixed(2)}</td><td class="m">${p.N.toFixed(2)}</td><td>${p.area.toFixed(2)}</td><td><b>${p.vol.toFixed(3)}</b></td><td>${(p.maxD*100).toFixed(1)}</td><td>${p.level.toFixed(3)}</td>${R.limN?`<td>${p.rev!=null?(p.rev*100).toFixed(1).replace(/^-0\.0$/,'0.0'):'—'}</td>`:''}<td>${p.over?'<b>oui</b>, côté '+e(p.side):p.contained?'non (contenue par la limite)':'non'}</td></tr>`);
     return `<h3>${k+1}. Fossé ${e(R.A.name)} → ${e(R.B.name)} <span class="sub">${R.L.toFixed(1)} m · ${e(R.t)}</span></h3>
 <div class="tiles"><div class="tile"><b>${R.vol.toFixed(R.vol<1?3:2)}</b><span>m³ d'eau accumulée</span></div><div class="tile"><b>${R.ponds.length}</b><span>cuvettes</span></div><div class="tile"><b>${(R.avgSlope!=null&&(R.slopes||[]).length>1?R.avgSlope:f.slope).toFixed(2)} %</b><span>pente moyenne${(R.slopes||[]).length>1?` (${R.slopes.length} lignes)`:''}</span></div><div class="tile ${R.nOver?'err':''}"><b>${R.nOver}</b><span>débordements possibles</span></div></div>
-<p><b>Sens d'écoulement général :</b> vers ${e(f.dir)}, de ${e(f.from.name)} (Z ${f.zFrom.toFixed(3)}) à ${e(f.to.name)} (Z ${f.zTo.toFixed(3)}). ${(R.slopes||[]).length>1?`Pente moyenne du fossé ${R.avgSlope.toFixed(2)} % (moyenne des pentes de ${R.slopes.map(x=>`${x.centre?'centre':'bord '+e(x.side)} ${e(x.label)} : ${x.slope.toFixed(2)} %`).join(' ; ')})${R.slopes.some(x=>!x.centre&&Math.abs(x.slope-f.slope)>.1)?' — <b style="color:#a86400">écart de plus de 0,10 % entre un bord et le centre</b>':''}. Écoulement, pente la plus faible et contre-pentes sur le centre (${e(R.profSrc)}) : pente ${f.slope.toFixed(2)} %`:`Pente moyenne ${f.slope.toFixed(2)} % (droite ajustée sur ${e(R.profSrc)})`}${f.minAt?` ; pente la plus faible ${f.minSl.toFixed(2)} % entre ${f.minAt[0].s.toFixed(1)} et ${f.minAt[1].s.toFixed(1)} m`:''}.${f.adv.length?` <b style="color:#a86400">${f.adv.length} contre-pente(s)</b> de plus de 1 cm : ${f.adv.map(x=>`${x.a.s.toFixed(1)}–${x.b.s.toFixed(1)} m (+${(x.rise*100).toFixed(1)} cm)`).join(', ')}.`:''}</p>
+${(()=>{const sl=R.slopes||[],cen=sl.find(x=>x.centre);const tr=(k,v,cls='')=>`<tr${cls?` class="${cls}"`:''}><th style="width:38%">${k}</th><td>${v}</td></tr>`;
+  const rows=[tr('Sens d\'écoulement',`vers ${e(f.dir)} : de ${e(f.from.name)} (Z ${f.zFrom.toFixed(3)}) à ${e(f.to.name)} (Z ${f.zTo.toFixed(3)})`),
+    tr('Pente moyenne du fossé',`<b>${(sl.length>1?R.avgSlope:f.slope).toFixed(2)} %</b>${sl.length>1?` (moyenne des pentes de ${sl.length} lignes)`:` (sur ${e(R.profSrc)})`}`),
+    ...sl.map(x=>tr(`&nbsp;&nbsp;${x.centre?'Centre':'Bord '+e(x.side)} — ${e(x.label)}`,`${x.slope.toFixed(2)} %${!x.centre&&cen&&Math.abs(x.slope-cen.slope)>.1?` <b style="color:#a86400">(écart ${(x.slope-cen.slope>0?'+':'')+(x.slope-cen.slope).toFixed(2)} % avec le centre)</b>`:''}`)),
+    tr('Ligne de calcul de l\'écoulement',e(R.profSrc)),
+    tr('Pente la plus faible (centre)',f.minAt?`${f.minSl.toFixed(2)} % entre ${f.minAt[0].s.toFixed(1)} et ${f.minAt[1].s.toFixed(1)} m${f.minSl<0?' (contre-pente)':''}`:'—',f.minSl<0?'out':''),
+    tr('Contre-pentes de plus de 1 cm',f.adv.length?`<b style="color:#a86400">${f.adv.length}</b> : ${f.adv.map(x=>`${x.a.s.toFixed(1)}–${x.b.s.toFixed(1)} m (+${(x.rise*100).toFixed(1)} cm)`).join(' ; ')}`:'aucune',f.adv.length?'out':'')];
+  return `<h3 class="note">Écoulement</h3><table class="small">${rows.join('')}</table><p class="note">Chaînages mesurés depuis le point 1 (${e(R.A.name)}).</p>`})()}
+<p hidden><b>Sens d'écoulement général :</b> vers ${e(f.dir)}, de ${e(f.from.name)} (Z ${f.zFrom.toFixed(3)}) à ${e(f.to.name)} (Z ${f.zTo.toFixed(3)}). ${(R.slopes||[]).length>1?`Pente moyenne du fossé ${R.avgSlope.toFixed(2)} % (moyenne des pentes de ${R.slopes.map(x=>`${x.centre?'centre':'bord '+e(x.side)} ${e(x.label)} : ${x.slope.toFixed(2)} %`).join(' ; ')})${R.slopes.some(x=>!x.centre&&Math.abs(x.slope-f.slope)>.1)?' — <b style="color:#a86400">écart de plus de 0,10 % entre un bord et le centre</b>':''}. Écoulement, pente la plus faible et contre-pentes sur le centre (${e(R.profSrc)}) : pente ${f.slope.toFixed(2)} %`:`Pente moyenne ${f.slope.toFixed(2)} % (droite ajustée sur ${e(R.profSrc)})`}${f.minAt?` ; pente la plus faible ${f.minSl.toFixed(2)} % entre ${f.minAt[0].s.toFixed(1)} et ${f.minAt[1].s.toFixed(1)} m`:''}.${f.adv.length?` <b style="color:#a86400">${f.adv.length} contre-pente(s)</b> de plus de 1 cm : ${f.adv.map(x=>`${x.a.s.toFixed(1)}–${x.b.s.toFixed(1)} m (+${(x.rise*100).toFixed(1)} cm)`).join(', ')}.`:''}</p>
 ${a.shot?`<figure style="margin:8px 0"><img src="${a.shot.url}" alt="Plan du tronçon analysé" style="width:100%;border:1px solid #d5dde1;border-radius:4px"><figcaption class="note">En bleu : eau accumulée (plus foncé = plus profond) · en rouge : cuvette dont le trop-plein sort par le côté du fossé (débordement) · tirets jaunes : limites du tronçon · flèche : sens d'écoulement.${a.shot.noBg?' Fond de plan non inclus (le serveur d\'imagerie ne permet pas la copie).':''}</figcaption></figure>`:''}
 <h3 class="note">Profil du fond</h3>${a.svg}
 <h3 class="note">Cuvettes (eau qui ne s'écoule pas vers les limites)</h3>${tbl(['No','Chaînage (m)','E','N','Surface (m²)','Volume (m³)','Prof. max (cm)','Niveau d\'eau',...(R.limN?['Revanche (cm)']:[]),'Débordement'],pt,'small')}${R.limN?`<p class="note">Frontières de la surface / limite à ne pas franchir : ${(R.lims||[]).map(e).join(', ')} (la surface s'arrête à ces lignes). Revanche = élévation la plus basse de la limite au droit de la cuvette − niveau d'eau ; débordement si le niveau d'eau dépasse la limite.</p>`:''}
 <p class="note">Surface : ${R.nPts} points et les lignes du levé (densifiées), ${R.nTri} triangles de ${R.maxEdge} m au plus, sur ${R.hw} m de part et d'autre de la droite ${e(R.A.name)}–${e(R.B.name)}${R.off.length?` ; codes exclus : ${R.off.map(e).join(', ')}`:''}. Maille de calcul ${R.c.toFixed(2)} m. L'eau peut sortir aux deux limites ; les cuvettes de moins de 5 L et 1 cm sont ignorées. Résultats indicatifs, à confirmer dans Civil 3D au besoin.</p>`}).join(''));
 }
 function repPlanSec(e,sec){
-  if(!S.view||!S.rows.length)return '';const sh=planShot(null);if(!sh)return '';
+  if(!S.view||!S.rows.length||(S.anas||[]).length)return '';const sh=planShot(null);if(!sh)return '';
   return sec('Vue du levé',`<figure style="margin:0"><img src="${sh.url}" alt="Vue du levé" style="width:100%;border:1px solid #d5dde1;border-radius:4px"><figcaption class="note">Vue du plan telle qu'affichée dans l'application au moment du rapport.${sh.noBg?' Fond de plan non inclus (le serveur d\'imagerie ne permet pas la copie).':''}</figcaption></figure>`);
 }
 
@@ -2523,12 +2534,13 @@ function draw(){
   for(let y=Math.floor(wy0/st)*st;y<=wy1;y+=st){const s=W2S(0,y)[1];ctx.moveTo(0,s);ctx.lineTo(S.W,s)}
   ctx.stroke();
   const selL=(S.tool?.kind==='close'||S.tool?.kind==='link'||S.tool?.kind==='cut')&&S.tool.opts&&S.tool.opts[S.tool.opt]?S.tool.opts[S.tool.opt].line:S.tool?.kind==='rev'&&S.tool.line?S.tool.line:(S.sel!=null?S.lineOf.get(S.sel):null);
-  S.lines.forEach((L,k)=>{const v=S.verts[k];ctx.strokeStyle=colOfCode(L.pcode);ctx.lineWidth=L===selL?3:1.4;ctx.beginPath();v.forEach((p,j)=>{const [x,y]=W2S(p[0],p[1]);j?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke();});
+  const DOFF=S.tool&&S.tool.kind==='ana'&&S.tool.off&&S.tool.off.size?S.tool.off:null;
+  S.lines.forEach((L,k)=>{if(DOFF&&DOFF.has(String(L.pcode)))return;const v=S.verts[k];ctx.strokeStyle=colOfCode(L.pcode);ctx.lineWidth=L===selL?3:1.4;ctx.beginPath();v.forEach((p,j)=>{const [x,y]=W2S(p[0],p[1]);j?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke();});
   try{anaDraw()}catch(e){console.error(e)}
   // points
   const showInfo=$('fInfo').checked;
   const lab=S.view.k>6;ctx.font='11px "JetBrains Mono", monospace';
-  for(const r of S.rows){if(r.bad)continue;const [x,y]=W2S(r.e,r.n);if(x<-40||y<-40||x>S.W+40||y>S.H+40)continue;
+  for(const r of S.rows){if(r.bad)continue;if(DOFF&&DOFF.has(String(parseDesc(r.desc).pcode||'?')))continue;const [x,y]=W2S(r.e,r.n);if(x<-40||y<-40||x>S.W+40||y>S.H+40)continue;
     if(r.del){ctx.save();ctx.strokeStyle='#5d6a72';ctx.lineWidth=1;ctx.setLineDash([2,2]);ctx.beginPath();ctx.arc(x,y,5,0,7);ctx.stroke();ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(x-3,y-3);ctx.lineTo(x+3,y+3);ctx.moveTo(x+3,y-3);ctx.lineTo(x-3,y+3);ctx.stroke();
       if(lab&&S.showNum){ctx.fillStyle='#5d6a72';const t=r.name.length>6&&S.view.k<25?r.name.slice(-3):r.name;ctx.fillText(t,x+7,y-6);const w=ctx.measureText(t).width;ctx.beginPath();ctx.moveTo(x+7,y-10);ctx.lineTo(x+7+w,y-10);ctx.stroke();}ctx.restore();continue}
     const p=parseDesc(r.desc);ctx.strokeStyle=p.pcode?colOfCode(p.pcode):'#fff';ctx.lineWidth=1;
@@ -2643,8 +2655,20 @@ $('bDxf').onclick=()=>{if(numGate())return;
   if(errs)toast(`DXF produit avec ${errs} erreur(s) non corrigée(s) : ces points sont dessinés sans liaison.`);
 };
 $('bJournal').onclick=()=>{const f=csvFile();save(f.name,f.data)};
-$('bRep').onclick=()=>{$('repFrame').srcdoc=reportHTML();$('repSheet').hidden=false};
+$('bRep').onclick=()=>{$('repFrame').srcdoc=reportHTML();$('repSheet').hidden=false;phRefresh()};
 $('repClose').onclick=()=>{$('repSheet').hidden=true};
+/* ---------- Photos du terrain (rapport) : réduites à 1600 px, gardées dans la séance ---------- */
+S.photos=S.photos||[];
+function phRefresh(){const L=S.photos;$('phN').textContent=L.length?`${L.length} photo(s) au rapport`:'aucune photo';
+  $('phList').innerHTML=L.map((p,k)=>`<div style="width:150px;font-size:12px"><img src="${p.url}" alt="" style="width:150px;height:100px;object-fit:cover;border-radius:4px;border:1px solid var(--line)"><input data-k="${k}" class="phCap" value="${esc(p.cap||'')}" placeholder="légende" style="width:100%;font-size:12px"><button class="btn sm phDel" data-k="${k}" type="button" style="margin-top:2px">Retirer</button></div>`).join('');
+  $('phList').querySelectorAll('.phCap').forEach(x=>x.onchange=()=>{S.photos[+x.dataset.k].cap=x.value;$('repFrame').srcdoc=reportHTML();sessSchedule()});
+  $('phList').querySelectorAll('.phDel').forEach(x=>x.onclick=()=>{S.photos.splice(+x.dataset.k,1);phRefresh();$('repFrame').srcdoc=reportHTML();sessSchedule()})}
+$('phIn').onchange=async e=>{const fs=[...e.target.files];e.target.value='';let n=0;
+  for(const f of fs){try{const bm=await createImageBitmap(f);const k=Math.min(1,1600/Math.max(bm.width,bm.height));const c=document.createElement('canvas');c.width=Math.round(bm.width*k);c.height=Math.round(bm.height*k);c.getContext('2d').drawImage(bm,0,0,c.width,c.height);
+    S.photos.push({url:c.toDataURL('image/jpeg',.82),cap:f.name.replace(/\.[^.]+$/,''),t:new Date(f.lastModified||Date.now()).toLocaleString('fr-CA'),name:f.name});n++}catch(err){toast(`${f.name} : image non lisible.`)}}
+  phRefresh();$('repFrame').srcdoc=reportHTML();if(n)toast(`${n} photo(s) ajoutée(s) au rapport.`);if(n&&S.hist)sessFileSave&&sessFileSave()};
+function repPhotoSec(e,sec){const L=S.photos||[];if(!L.length)return '';
+  return sec('Photos du terrain',`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">${L.map((p,k)=>`<figure style="margin:0;break-inside:avoid"><img src="${p.url}" alt="${e(p.cap||'')}" style="width:100%;border:1px solid #d5dde1;border-radius:4px"><figcaption class="note"><b>Photo ${k+1}</b>${p.cap?' — '+e(p.cap):''}${p.t?` · ${e(p.t)}`:''}</figcaption></figure>`).join('')}</div>`)}
 $('repSave').onclick=()=>{const f=repFile();save(f.name,f.data)};
 $('repPrint').onclick=()=>{try{$('repFrame').contentWindow.focus();$('repFrame').contentWindow.print()}catch(e){toast('Impression bloquée ici : enregistrez le rapport puis ouvrez-le pour l\'imprimer.')}};
 
@@ -2801,6 +2825,7 @@ ${sec('Sommaire',`<div class="tiles">
 </div>`)}
 ${repPlanSec(e,sec)}
 ${anaReportSec(e,sec,tbl)}
+${repPhotoSec(e,sec)}
 ${gnss.length?sec('Qualité GNSS',`<div class="grid">
 ${kv('Statut des solutions',Object.entries(st).map(([k,v])=>`${e(k)} : ${v}`).join(' · '))}
 ${kv('RMS horizontal (m)',lat.length?`moyenne ${avg(lat).toFixed(3)} · max ${mx(lat).toFixed(3)}`:null,`tolérance ${tolH.toFixed(3)}`)}
