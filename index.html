@@ -350,7 +350,7 @@ tr.hion td{background:color-mix(in srgb,#ffc440 18%,transparent)}
             <code>_</code><span>Liaison multiple sur un même point : <code>526 1.2_2.1</code> ferme le string 1 et débute le string 2 ; <code>181 1_186 1.1</code> continue le 181 et débute le 186 (double Pcode). Autant de liaisons que voulu.</span>
           </div>
           <p class="note">Format lu&nbsp;: <code>Matricule,Est,Nord,Élév,Description</code> où la description est <code>Pcode String.Contrôle [attributs]</code>, ex. <code>526 1.1</code>. Le fichier _modif est toujours écrit au format <code>P,N,E,Z,D</code> (Point, Nord, Est, Élév., Description), sans ligne d'en-tête, quel que soit le format lu. Il contient les descriptions corrigées, les coordonnées des points inversés et les points calculés (rectangle), insérés juste après le dernier point de leur ligne.</p>
-          <p class="note">Version v9.2-2026-11-03 · fonctionne hors ligne une fois ouverte · les fichiers restent sur l'appareil.</p>
+          <p class="note">Version v9.3-2026-11-03 · fonctionne hors ligne une fois ouverte · les fichiers restent sur l'appareil.</p>
           <div class="actions"><button class="btn sm" id="bJournal" type="button" disabled>Exporter le journal des corrections (.csv)</button><button class="btn sm" id="bResetLay" type="button">Rétablir les couches du gabarit</button></div>
         </div>
       </div>
@@ -901,6 +901,7 @@ function analyze(rows,codes,opt){
   };
   const names=new Map();
   for(const r of rows){
+    if(r.del){r.p=null;continue} // point effacé : exclu de l'analyse et de l'exportation (rétablissable)
     if(r.bad){add('err',r.i,'Coordonnées illisibles sur cette ligne du fichier.','coords');continue}
     if(names.has(r.name)) add('warn',r.i,`Matricule en double (déjà utilisé au point ${rows[names.get(r.name)].name}).`,'dupName'); else names.set(r.name,r.i);
     const p=r.p=parseDesc(r.desc);
@@ -1047,7 +1048,7 @@ function buildDXF(rows,lines,layerOf,colorOf,o){
   const ents=[];
   const E=(...a)=>ents.push(a);
   let xmin=1e99,ymin=1e99,xmax=-1e99,ymax=-1e99;
-  for(const r of rows){ if(r.bad) continue; if(r.ctl==='ref'&&!o.incRef) continue; xmin=Math.min(xmin,r.e);ymin=Math.min(ymin,r.n);xmax=Math.max(xmax,r.e);ymax=Math.max(ymax,r.n);
+  for(const r of rows){ if(r.bad||r.del) continue; if(r.ctl==='ref'&&!o.incRef) continue; xmin=Math.min(xmin,r.e);ymin=Math.min(ymin,r.n);xmax=Math.max(xmax,r.e);ymax=Math.max(ymax,r.n);
     const lay=r.p&&r.p.pcode?layerOf(r.p.pcode):o.pref('C-GEO-POINT-LEVE'); used.add(lay);
     E(0,'POINT',8,lay,10,f(r.e),20,f(r.n),30,Z(r.z));
     const h=o.h;
@@ -1117,7 +1118,7 @@ function makeZip(files){
   const total=all.reduce((s,a)=>s+a.length,0);const u=new Uint8Array(total);let p=0;for(const a of all){u.set(a,p);p+=a.length;}
   return u;
 }
-function isModified(r){return r.desc!==r.orig||r.xyz[0]!==r.oxyz[0]||r.xyz[1]!==r.oxyz[1]||r.xyz[2]!==r.oxyz[2]}
+function isModified(r){return !!r.del||r.desc!==r.orig||r.xyz[0]!==r.oxyz[0]||r.xyz[1]!==r.oxyz[1]||r.xyz[2]!==r.oxyz[2]}
 /* Inverse deux matricules : chaque point physique prend le numéro (et la place dans la séquence) de l'autre */
 function swapPoints(A,B,withDesc){
   for(const k of ['e','n','z','xyz','bad']){const t=A[k];A[k]=B[k];B[k]=t;}
@@ -1258,7 +1259,7 @@ function suggestCodes(text,codes,mem,op){
 
 /* Le code d'une description est-il au standard ? (sinon : texte à associer) */
 function nonStdText(r,codes){
-  if(r.bad||r.ctl==='ref'||r.added||r.calc)return null;
+  if(r.bad||r.del||r.ctl==='ref'||r.added||r.calc)return null;
   const d=(r.desc||'').trim();if(!d)return null;
   const p=parseDesc(d);
   if(p.err==='Pcode non numérique')return d;
@@ -1395,12 +1396,12 @@ document.addEventListener('drop',e=>{const f=e.dataTransfer?.files?.[0];if(f)rea
 function run(){
   const A=analyze(S.rows,CODES,opt());
   S.lines=A.lines;S.issues=A.issues;S.cmds=A.cmds||[];
-  for(const r of S.rows) if(r.calc&&!r.calc.zOk) S.issues.push({sev:'warn',row:r.i,kind:'zcheck',msg:`Élévation du point calculé à confirmer : Z = ${r.xyz[2]} par défaut (${r.calc.kind}).`});
+  for(const r of S.rows) if(r.calc&&!r.calc.zOk&&!r.del) S.issues.push({sev:'warn',row:r.i,kind:'zcheck',msg:`Élévation du point calculé à confirmer : Z = ${r.xyz[2]} par défaut (${r.calc.kind}).`});
   checkNumbering();
   // élément circulaire (ex. 231 Puisard circulaire) levé en ligne de 2-3 points sans .6 : proposer le cercle
   {const circ=S.lines.filter(L=>L.type==='line'&&!L.closed&&L.pts.length>=2&&L.pts.length<=3&&/circulaire/i.test((CODES.get(L.pcode)||{}).desc||''));
     for(const L of circ)S.issues.push({sev:'info',row:L.pts[0],kind:'circ',line:L,all:circ,msg:`${L.pcode} ${(CODES.get(L.pcode)||{}).abr||''} / string ${L.str} : élément circulaire levé par ${L.pts.length} points en ligne. Le dessiner en cercle (.6) ?`});}
-  {const g=new Map();for(const r of S.rows){if(!r.field||r.added)continue;const p=parseDesc(r.desc);if(!p.pcodeOnly||!p.links.length)continue;const l=p.links[0];if(l.pcode===p.pcode)continue;
+  {const g=new Map();for(const r of S.rows){if(!r.field||r.added||r.del)continue;const p=parseDesc(r.desc);if(!p.pcodeOnly||!p.links.length)continue;const l=p.links[0];if(l.pcode===p.pcode)continue;
       const k=p.pcode+'>'+l.pcode+'|'+l.str;if(!g.has(k))g.set(k,{fp:p.pcode,lp:l.pcode,str:l.str,rows:[]});g.get(k).rows.push(r.i);}
     for(const x of g.values()){const n=x.rows.length;S.issues.push({sev:'info',row:x.rows[0],kind:'codemix',mix:x,msg:`Code ${x.fp} (champ Code) mais liaison de la ligne ${x.lp} / ${x.str} (description) sur ${n} point${n>1?'s':''} (${x.rows.map(i=>S.rows[i].name.slice(-3)).join(', ')}) : code resté du point précédent ?`});}}
   {const G=groupCodes(S.rows,CODES);if(G.length){const n=G.reduce((s,g)=>s+g.n,0);
@@ -1427,6 +1428,7 @@ function linkOf(i,key){return parseDesc(S.rows[i].desc).links.find(l=>l.pcode+'|
 function undo(){const h=S.hist.pop();if(!h)return;undoEntry(h);
   run();toast('Modification annulée.')}
 function undoEntry(h){
+  if(h.type==='del'){h.r.del=h.before;S.journal.push({name:h.r.name,before:'',after:'',why:h.before?'Annulation : point de nouveau effacé':'Annulation : point rétabli',t:new Date().toLocaleString('fr-CA')});return}
   if(h.type==='calc'){const k=S.rows.indexOf(h.r);if(k>=0)S.rows.splice(k,1);for(const s of h.items)Object.assign(s.r,s.st);reindex();if(S.sel!=null&&!S.rows[S.sel])S.sel=null;S.journal.push({name:h.r.name,before:'',after:'',why:'Point calculé retiré',t:new Date().toLocaleString('fr-CA')});}
   else if(h.type==='rename'){for(const s of h.items)s.r.name=s.name;if(S.renumLog&&h.renEnt){const q=S.renumLog.indexOf(h.renEnt);if(q>=0)S.renumLog.splice(q,1)}S.journal.push({name:'Numérotation',before:'',after:'',why:'Annulation de la renumérotation',t:new Date().toLocaleString('fr-CA')});}
   else if(h.type==='snap'){const F=h.fields||['desc','xyz'];for(const s of h.items){if(F.includes('desc'))s.r.desc=s.st.desc;if(F.includes('xyz')){for(const k of ['e','n','z','bad','hi','swapNote'])s.r[k]=s.st[k];s.r.xyz=s.st.xyz.slice()}}if(h.hiEnt&&S.hiLog){const q=S.hiLog.indexOf(h.hiEnt);if(q>=0)S.hiLog.splice(q,1)}S.journal.push({name:h.label,before:'',after:'',why:'Annulation',t:new Date().toLocaleString('fr-CA')});}
@@ -1437,8 +1439,8 @@ function undoEntry(h){
 /* ---------- Historique : annuler une correction précise ----------
    Une correction plus ancienne peut être annulée seule si aucune correction plus récente ne touche les mêmes points
    (mêmes données) ; sinon les corrections liées sont annulées avec elle (on le dit avant). */
-function histRows(h){switch(h.type){case 'desc':return [h.r];case 'swap':return [h.A,h.B];case 'add':return [h.r,h.C].filter(Boolean);case 'calc':return [h.r,...h.items.map(s=>s.r)];case 'snap':case 'rename':return h.items.map(s=>s.r)}return []}
-function histFields(h){if(h.fields)return h.fields;return h.type==='rename'?['name']:h.type==='desc'?['desc']:['desc','xyz']}
+function histRows(h){switch(h.type){case 'desc':case 'del':return [h.r];case 'swap':return [h.A,h.B];case 'add':return [h.r,h.C].filter(Boolean);case 'calc':return [h.r,...h.items.map(s=>s.r)];case 'snap':case 'rename':return h.items.map(s=>s.r)}return []}
+function histFields(h){if(h.fields)return h.fields;return h.type==='del'?['del']:h.type==='rename'?['name']:h.type==='desc'?['desc']:['desc','xyz']}
 function histDeps(k){const rows=new Set(histRows(S.hist[k])),f=new Set(histFields(S.hist[k])),out=[];
   for(let j=k+1;j<S.hist.length;j++){const h=S.hist[j];const hf=histFields(h);if(hf.some(x=>f.has(x))&&histRows(h).some(r=>rows.has(r))){out.push(j);histRows(h).forEach(r=>rows.add(r));hf.forEach(x=>f.add(x))}}return out}
 function undoSelect(k){const idx=[k,...histDeps(k)].sort((a,b)=>b-a);const lab=S.hist[k].why||'correction';
@@ -1591,7 +1593,7 @@ function cutLine(L,pieces){
 /* ---------- Hauteur d'antenne (GNSS) ou de prisme ----------
    Z corrigé = Z − (bonne hauteur − hauteur actuelle). La hauteur actuelle vient du fichier (Emlid : Antenna height)
    ou est inscrite. Corrections listées dans le journal et le rapport. */
-const hiEligible=r=>!r.bad&&!r.added&&r.ctl!=='ref';
+const hiEligible=r=>!r.bad&&!r.del&&!r.added&&r.ctl!=='ref';
 function hiOf(r){if(r.hi!=null)return r.hi;if(!r.meta)return null;const k=Object.keys(r.meta).find(x=>/^antenna height$|^hauteur d.antenne$|^target height$|^hauteur (de )?prisme$|^hauteur de cible$/i.test(x));const v=k?parseFloat(r.meta[k]):NaN;return isFinite(v)?v:null}
 function hiSel(t){const ex=t.excl||new Set();const set=new Set(t.picks.map(i=>S.rows[i]).filter(r=>r&&hiEligible(r)));
   const ix=v=>{if(!v)return -1;let j=S.rows.findIndex(x=>x.name===v);if(j<0)j=S.rows.findIndex(x=>x.name.endsWith(v));return j};
@@ -1824,6 +1826,9 @@ function ctlDelta(r){if(r.ctl==='ref'){const ms=S.rows.filter(x=>x.ctl&&x.ctl!==
     return ms.map(x=>{const dE=x.e-r.e,dN=x.n-r.n,dZ=x.z-r.z;return `<br>Mesuré ${esc(x.name)} : ΔE ${dE.toFixed(3)} · ΔN ${dN.toFixed(3)} · ΔH ${Math.hypot(dE,dN).toFixed(3)} · ΔZ ${dZ.toFixed(3)}`}).join('')}
   const R=ctlRef(r);if(!R)return '';const dE=r.e-R.e,dN=r.n-R.n,dZ=r.z-R.z;return `<br>Écart avec la référence : ΔE ${dE.toFixed(3)} · ΔN ${dN.toFixed(3)} · ΔH ${Math.hypot(dE,dN).toFixed(3)} · ΔZ ${dZ.toFixed(3)}`}
 /* Rétablir un point : description, coordonnées et hauteur d'antenne du terrain (le matricule reste, voir NUMÉROTER / Annuler) */
+function setDel(r,v){if(!!r.del===v)return;S.hist.push({type:'del',r,before:!!r.del});r.del=v;
+  S.journal.push({name:r.name,before:v?r.desc:'',after:v?'':r.desc,why:v?'Point effacé : exclu de l\'exportation (rétablissable)':'Point effacé rétabli',t:new Date().toLocaleString('fr-CA')});
+  run();toast(v?`Point ${r.name} effacé : il ne sera pas exporté. « Rétablir » dans sa fiche ou Annuler.`:`Point ${r.name} rétabli.`)}
 function revLabel(r){if(r.added)return '';const d=r.desc!==r.orig,c=r.xyz.some((v,k)=>v!==r.oxyz[k]);return d&&c?'Rétablir le point (terrain)':d?'Rétablir la description':c?(r.hi!=null?'Rétablir l\'élévation et la hauteur':'Rétablir les coordonnées'):''}
 function revertPoint(r){const items=[{r,st:snapState(r)}];const before=`${r.xyz.join(' ')} ${r.desc}`;
   r.desc=r.orig;r.xyz=r.oxyz.slice();r.e=+r.xyz[0];r.n=+r.xyz[1];r.z=+r.xyz[2];delete r.hi;
@@ -1853,7 +1858,7 @@ function renderInsp(){
     ${r.field?`<div class="note">Au terrain${S.F&&S.F.fmt?' ('+esc(S.F.fmt)+')':''} : Code <span class="mono">${esc(r.field.code||'—')}</span> · Description <span class="mono">${esc(r.field.desc||'—')}</span></div>`:''}
     ${r.ctl==='ref'?`<div class="note"><b>Coordonnée de référence</b> du monument <span class="mono">${esc(r.mon)}</span> : sert au contrôle (rapport), ${$('oRef').checked?'exportée':'non exportée'} dans le _modif et le DXF (voir Options).${ctlDelta(r)}</div>`:''}
     ${r.ctl&&r.ctl!=='ref'?`<div class="note"><b>Implantation / contrôle</b> : nom au terrain <span class="mono">${esc(r.fieldName)}</span>, renuméroté ${esc(r.name)} (fin de la séquence).${ctlDelta(r)}</div>`:''}
-    <div class="actions"><button class="btn sm primary" id="iApply" type="button">Appliquer</button>${revLabel(r)?`<button class="btn sm" id="iRevert" type="button" title="Remet les valeurs lues au terrain pour ce point seulement (le matricule reste)">${revLabel(r)}</button>`:''}</div>
+    ${r.del?`<div class="note" style="color:var(--err)"><b>Point effacé</b> : exclu du _modif.txt, du DXF et du rapport. Il reste visible en gris pour pouvoir le rétablir.</div>`:''}<div class="actions"><button class="btn sm primary" id="iApply" type="button">Appliquer</button><button class="btn sm" id="iDel" type="button" title="${r.del?'Remettre ce point dans le levé et les exportations':'Retirer ce point du levé exporté ; il reste rétablissable'}">${r.del?'Rétablir le point effacé':'Effacer ce point'}</button>${revLabel(r)?`<button class="btn sm" id="iRevert" type="button" title="Remet les valeurs lues au terrain pour ce point seulement (le matricule reste)">${revLabel(r)}</button>`:''}</div>
     ${!r.added&&(r.xyz[2]!==r.oxyz[2]||r.xyz[0]!==r.oxyz[0]||r.xyz[1]!==r.oxyz[1]||(r.origName&&r.origName!==r.name))?`<div class="note">Au terrain : ${r.xyz[2]!==r.oxyz[2]?`Z <del class="mono">${esc(r.oxyz[2])}</del> `:''}${r.xyz[0]!==r.oxyz[0]||r.xyz[1]!==r.oxyz[1]?`E/N <del class="mono">${esc(r.oxyz[0])} / ${esc(r.oxyz[1])}</del> `:''}${r.origName&&r.origName!==r.name?`matricule <span class="mono">${esc(r.origName)}</span> (renuméroté)`:''}</div>`:''}
     <div class="swapbox">
       <div class="field"><label for="iSwap">Inverser la numérotation avec le matricule</label>
@@ -1877,6 +1882,7 @@ function renderInsp(){
     const r2=S.rows.find(x=>x===r);if(r2&&r2.desc!==d){setDesc(r2.i,d,'Édition manuelle');toast('Description mise à jour.')}};
   $('iDesc').onkeydown=e=>{if(e.key==='Enter')$('iApply').click()};
   if($('iRevert'))$('iRevert').onclick=()=>revertPoint(r);
+  $('iDel').onclick=()=>setDel(r,!r.del);
   const nameIdx=()=>{const v=$('iSwap').value.trim();let j=S.rows.findIndex(x=>x.name===v);if(j<0&&v)j=S.rows.findIndex(x=>x.name.endsWith(v));return j};
   $('iSwapGo').onclick=()=>{const j=nameIdx();if(j<0){toast('Matricule introuvable dans ce levé.');return}if(j===i){toast('Choisissez un autre point.');return}doSwap(i,j,$('iSwapDesc').checked)};
   $('iSwap').onkeydown=e=>{if(e.key==='Enter')$('iSwapGo').click()};
@@ -1897,7 +1903,7 @@ function renderPts(){
   const hiOn=S.tool?.kind==='hi',hset=hiOn?new Set(hiSel(S.tool)):null;
   $('ptBody').innerHTML=rows.slice(0,3000).map(r=>{const sv=S.sevOf.get(r.i);const h=hiOf(r);const zMod=r.xyz[2]!==r.oxyz[2];
     const hc=r.added||r.ctl==='ref'?'<td class="mono" style="color:var(--muted)">—</td>':`<td class="mono">${hiOn&&hiEligible(r)?`<input type="checkbox" class="hiChk" data-i="${r.i}" ${hset.has(r)?'checked':''} aria-label="Corriger la hauteur de ${esc(r.name)}"> `:''}${h==null?'<span style="color:var(--muted)">?</span>':(r.hi!=null?`<span class="modtag">${h.toFixed(3)}</span>`:h.toFixed(3))}</td>`;
-    return `<tr class="click${S.sel===r.i?' sel':''}${hiOn&&hset.has(r)?' hion':''}" data-i="${r.i}"><td class="mono">${sv&&sv!=='info'?`<span class="pill ${sv}" style="margin-right:6px">${sv==='err'?'!':'?'}</span>`:''}${esc(r.name)}</td><td class="mono">${r.desc!==r.orig?`<del>${esc(r.orig)}</del> <span class="modtag">${esc(r.desc)}</span>`:esc(r.desc)}${r.swapNote?` <span class="modtag">${esc(r.swapNote)}</span>`:''}</td><td class="mono">${zMod?`<del style="display:block;font-size:.75em">${esc(r.oxyz[2])}</del><span class="modtag">${r.z.toFixed(3)}</span>`:r.z.toFixed(3)}</td>${hc}</tr>`}).join('')||'<tr><td colspan="4" class="empty">Aucun point.</td></tr>';
+    return `<tr class="click${S.sel===r.i?' sel':''}${hiOn&&hset.has(r)?' hion':''}" data-i="${r.i}"${r.del?' style="opacity:.55"':''}><td class="mono">${sv&&sv!=='info'?`<span class="pill ${sv}" style="margin-right:6px">${sv==='err'?'!':'?'}</span>`:''}${r.del?`<del>${esc(r.name)}</del> <span class="pill err">effacé</span>`:esc(r.name)}</td><td class="mono">${r.desc!==r.orig?`<del>${esc(r.orig)}</del> <span class="modtag">${esc(r.desc)}</span>`:esc(r.desc)}${r.swapNote?` <span class="modtag">${esc(r.swapNote)}</span>`:''}</td><td class="mono">${zMod?`<del style="display:block;font-size:.75em">${esc(r.oxyz[2])}</del><span class="modtag">${r.z.toFixed(3)}</span>`:r.z.toFixed(3)}</td>${hc}</tr>`}).join('')||'<tr><td colspan="4" class="empty">Aucun point.</td></tr>';
 }
 $('ptBody').onclick=e=>{const tr=e.target.closest('tr[data-i]');if(!tr)return;const i=+tr.dataset.i;
   if(S.tool?.kind==='hi'&&hiEligible(S.rows[i])){toolPick(i);renderPts();return}select(i,true)};
@@ -1999,7 +2005,7 @@ function toolRender(){
       }
     }
   } else if(t.kind==='link'){
-    if(n.length<2) msg=t.chain&&n.length===1?`Lier en continu depuis <b class="mono">${esc(n[0])}</b> : touchez le point suivant. « Recommencer » pour une autre ligne.`:`Lier 2 points : touchez le point déjà relié, puis celui à rattacher (${n.length}/2)${n.length?' · <b class="mono">'+esc(n[0])+'</b>':''}. Ensuite, la ligne continue d'office depuis le 2<sup>e</sup> point.`;
+    if(n.length<2) msg=t.chain&&n.length===1?`Lier en continu depuis <b class="mono">${esc(n[0])}</b> : touchez le point suivant (liaison faite d'office). « Recommencer » pour une autre ligne, « Terminer » pour finir.`:`Lier en continu : touchez le 1<sup>er</sup> point, puis les suivants dans l'ordre (${n.length}/2)${n.length?' · <b class="mono">'+esc(n[0])+'</b>':''}. Chaque liaison se fait d'office ; « Terminer » pour finir.`;
     else{const opts=linkOptions(t.picks[0],t.picks[1]);t.opts=opts;
       if(!opts.length) msg=`<span style="color:var(--err)">Aucune liaison possible entre <b class="mono">${esc(n[0])}</b> et <b class="mono">${esc(n[1])}</b> dans l'ordre du levé.</span>`;
       else{if(t.opt==null||t.opt>=opts.length)t.opt=0;ok=true;
@@ -2035,7 +2041,7 @@ function toolRender(){
       else{ok=true;S.rectPrev={a:k.a,c:k.c,q:k.q};msg=`Coin <b class="mono">${esc(S.rows[k.b].name)}</b> · angle ${k.q.ang.toFixed(2)}°${Math.abs(k.q.ang-90)>3?' <span class="pill warn">pas d\'équerre</span>':''} · nouveau point <b class="mono">${esc(nextName())}</b> (${esc(k.L.pcode)} ${esc(k.L.str)}.2 CALCUL) · Z = 0 par défaut, à confirmer dans la fiche du point (Z calculé possible : ${k.q.z.toFixed(3)})`;}
     }
   }
-  bar.innerHTML=`<div class="tbmsg">${msg}</div>${extra}<div class="actions"><button class="btn sm primary" id="tbGo" type="button" ${ok?'':'disabled'}>${t.kind==='swap'?'Inverser':t.kind==='rev'?'Inverser la ligne':(t.kind==='close'||t.kind==='link')?'Appliquer':t.kind==='cut'?'Retirer le segment':t.kind==='join'?'Unir':t.kind==='hi'?'Corriger les élévations':'Construire le 4e point'}</button><button class="btn sm" id="tbReset" type="button">Recommencer</button><button class="btn sm" id="tbClose" type="button">Fermer</button></div>`;
+  bar.innerHTML=`<div class="tbmsg">${msg}</div>${extra}<div class="actions"><button class="btn sm primary" id="tbGo" type="button" ${ok?'':'disabled'}>${t.kind==='swap'?'Inverser':t.kind==='rev'?'Inverser la ligne':(t.kind==='close'||t.kind==='link')?'Appliquer':t.kind==='cut'?'Retirer le segment':t.kind==='join'?'Unir':t.kind==='hi'?'Corriger les élévations':'Construire le 4e point'}</button><button class="btn sm" id="tbReset" type="button">Recommencer</button><button class="btn sm" id="tbClose" type="button">${t.kind==='link'?'Terminer':'Fermer'}</button></div>`;
   if($('tbDesc'))$('tbDesc').onchange=e=>{t.withDesc=e.target.checked};
   if($('tbStart'))$('tbStart').onchange=e=>{t.start=e.target.checked};
   if($('hiA')){const upd=()=>{t.a=$('hiA').value.trim();t.b=$('hiB').value.trim();toolRender();draw()};$('hiA').onchange=upd;$('hiB').onchange=upd;
@@ -2061,9 +2067,13 @@ function toolRender(){
 }
 function toolPick(i){
   const t=S.tool,k=t.picks.indexOf(i);
+  if(S.rows[i]&&S.rows[i].del&&k<0){toast(`Le point ${S.rows[i].name} est effacé : rétablissez-le d'abord (fiche du point).`);return}
   if(t.kind==='hi'&&k<0){t.excl=t.excl||new Set();const r=S.rows[i];if(t.excl.has(r)){t.excl.delete(r);toolRender();draw();return}if(hiSel(t).includes(r)){t.excl.add(r);toolRender();draw();return}}
   if(k>=0)t.picks.splice(k,1);
   else{const max=t.kind==='hi'?1e9:(t.kind==='swap'||t.kind==='close'||t.kind==='link'||t.kind==='cut'||t.kind==='join')?2:t.kind==='rev'?1:(CMD_NEED[t.kind]&&t.kind!=='RECT')?CMD_NEED[t.kind]:3;if(t.kind==='rev')t.line=null;if(t.picks.length>=max)t.picks=[];t.picks.push(i);}
+  // LIER en continu : une seule liaison possible → appliquée d'office, le point touché devient le départ de la suivante
+  if(t.kind==='link'&&t.picks.length===2){const [a,b]=t.picks;const opts=linkOptions(a,b);
+    if(opts.length===1){opts[0].fn();S.tool={kind:'link',picks:[b],chain:true};toolRender();draw();return}}
   toolRender();draw();
 }
 const TOOLS=[['tSwap','swap'],['tRev','rev'],['tClose','close'],['tLink','link'],['tCut','cut'],['tJoin','join'],['tHi','hi'],['tRect','rect'],['t2P','2P'],['t2PD','2PD'],['t2D','2D'],['t3PP','3PP'],['t4P','4P'],['t3C','3C']];
@@ -2159,6 +2169,8 @@ function draw(){
   const showInfo=$('fInfo').checked;
   const lab=S.view.k>6;ctx.font='11px "JetBrains Mono", monospace';
   for(const r of S.rows){if(r.bad)continue;const [x,y]=W2S(r.e,r.n);if(x<-40||y<-40||x>S.W+40||y>S.H+40)continue;
+    if(r.del){ctx.save();ctx.strokeStyle='#5d6a72';ctx.lineWidth=1;ctx.setLineDash([2,2]);ctx.beginPath();ctx.arc(x,y,5,0,7);ctx.stroke();ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(x-3,y-3);ctx.lineTo(x+3,y+3);ctx.moveTo(x+3,y-3);ctx.lineTo(x-3,y+3);ctx.stroke();
+      if(lab&&S.showNum){ctx.fillStyle='#5d6a72';const t=r.name.length>6&&S.view.k<25?r.name.slice(-3):r.name;ctx.fillText(t,x+7,y-6);const w=ctx.measureText(t).width;ctx.beginPath();ctx.moveTo(x+7,y-10);ctx.lineTo(x+7+w,y-10);ctx.stroke();}ctx.restore();continue}
     const p=parseDesc(r.desc);ctx.strokeStyle=p.pcode?colOfCode(p.pcode):'#fff';ctx.lineWidth=1;
     if(r.ctl){ctx.strokeStyle=r.ctl==='ref'?'#9fb0b9':'#e070e0';ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(x,y-6);ctx.lineTo(x+5.5,y+4);ctx.lineTo(x-5.5,y+4);ctx.closePath();ctx.stroke();if(r.ctl!=='ref'){ctx.fillStyle='#e070e0';ctx.fillRect(x-1.5,y-1.5,3,3)}}
     else{ctx.beginPath();ctx.moveTo(x-3,y-3);ctx.lineTo(x+3,y+3);ctx.moveTo(x+3,y-3);ctx.lineTo(x-3,y+3);ctx.stroke();}
@@ -2234,7 +2246,7 @@ async function save(filename,data){
 const base=()=>S.fileName.replace(/\.[^.]+$/,'');
 const ext=()=>(S.fileName.match(/\.[^.]+$/)||['.txt'])[0];
 /* Fichiers produits (partagés entre l'export et l'envoi par courriel) */
-const expRows=()=>S.rows.filter(r=>r.ctl!=='ref'||$('oRef').checked);
+const expRows=()=>S.rows.filter(r=>!r.del&&(r.ctl!=='ref'||$('oRef').checked));
 function txtFile(){const txt=buildModifText(S.F,expRows());return {name:base()+'_modif'+(/\.txt$/i.test(ext())?ext():'.txt'),data:S.enc==='utf-8'?new TextEncoder().encode(txt):toCp1252(txt),type:'text/plain'}}
 function dxfOpts(){return {threeD:$('o3d').checked,h:+$('oTxtH').value||.2,num:$('oDxNum').checked,elev:$('oDxElev').checked,code:$('oDxCode').checked,step:Math.max(.05,+$('oStep').value||.25),pref,incRef:$('oRef').checked}}
 function dxfFile(){const nm=base()+(S.rows.some(isModified)?'_modif':'');return {name:nm+'.dxf',data:toCp1252(buildDXF(S.rows,S.lines,layerOf,colorIdx,dxfOpts())),type:'application/dxf'}}
@@ -2317,7 +2329,7 @@ function reportHTML(){
   const uniq=a=>[...new Set(a.filter(v=>v!=null&&v!==''))];
   const f3=v=>v==null?'—':v.toFixed(3);
   const tolH=+$('oTolH').value||.03,tolV=+$('oTolV').value||.05,tolC=+$('oTolC').value||.03;
-  const rows=S.rows.filter(r=>!r.bad);
+  const rows=S.rows.filter(r=>!r.bad&&!r.del);
   const meas=rows.filter(r=>!r.added&&r.ctl!=='ref');
   const hasMeta=rows.some(r=>r.meta&&Object.keys(r.meta).length>8);
   const gnss=meas.filter(r=>r.meta&&(M(r,'Solution status')||M(r,'Lateral RMS')));
@@ -2441,7 +2453,7 @@ function stdOf(name){
   if(/^\d{9}$/.test(name)){const j=+name.slice(1,4),ss=+name.slice(4,6),n=+name.slice(6);if(name[0]!=='0'&&j>=1&&j<=366&&ss>=1&&n>=1)return {std:'J',a:+name[0],j,ss,n}}
   if(/^\d{10}$/.test(name)){const y=2000+ +name.slice(0,2),mo=+name.slice(2,4),d=+name.slice(4,6),n=+name.slice(6);const D=new Date(Date.UTC(y,mo-1,d));if(name[0]!=='0'&&mo>=1&&mo<=12&&D.getUTCMonth()===mo-1&&D.getUTCDate()===d&&n>=1)return {std:'D',date:D,n}}
   return null}
-const numEligible=r=>!r.bad&&r.ctl!=='ref';
+const numEligible=r=>!r.bad&&!r.del&&r.ctl!=='ref';
 function checkNumbering(){
   const rows=S.rows.filter(numEligible);if(!rows.length)return;
   const st=rows.map(r=>({r,s:stdOf(r.name)}));const bad=st.filter(x=>!x.s);const cnt={J:0,D:0};st.forEach(x=>{if(x.s)cnt[x.s.std]++});
