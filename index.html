@@ -353,7 +353,7 @@ tr.hion td{background:color-mix(in srgb,#ffc440 18%,transparent)}
             <code>_</code><span>Liaison multiple sur un même point : <code>526 1.2_2.1</code> ferme le string 1 et débute le string 2 ; <code>181 1_186 1.1</code> continue le 181 et débute le 186 (double Pcode). Autant de liaisons que voulu.</span>
           </div>
           <p class="note">Format lu&nbsp;: <code>Matricule,Est,Nord,Élév,Description</code> où la description est <code>Pcode String.Contrôle [attributs]</code>, ex. <code>526 1.1</code>. Le fichier _modif est toujours écrit au format <code>P,N,E,Z,D</code> (Point, Nord, Est, Élév., Description), sans ligne d'en-tête, quel que soit le format lu. Il contient les descriptions corrigées, les coordonnées des points inversés et les points calculés (rectangle), insérés juste après le dernier point de leur ligne.</p>
-          <p class="note">Version v9.5-2026-11-03 · fonctionne hors ligne une fois ouverte · les fichiers restent sur l'appareil.</p>
+          <p class="note">Version v9.5.1-2026-11-03 · fonctionne hors ligne une fois ouverte · les fichiers restent sur l'appareil.</p>
           <div class="actions"><button class="btn sm" id="bJournal" type="button" disabled>Exporter le journal des corrections (.csv)</button><button class="btn sm" id="bResetLay" type="button">Rétablir les couches du gabarit</button></div>
         </div>
       </div>
@@ -465,7 +465,7 @@ tr.hion td{background:color-mix(in srgb,#ffc440 18%,transparent)}
       <label><input type="radio" name="bgSrc" value="esri"> Imagerie en ligne — Esri World Imagery <span class="note">(dépannage, précision ± 1 m)</span></label>
       <label><input type="radio" name="bgSrc" value="custom"> Service personnalisé (modèle d'URL {z}/{x}/{y})</label>
     </fieldset>
-    <div class="actions"><label class="btn filebtn">Ouvrir des orthos du projet…<input type="file" id="bgFiles" multiple accept=".jpg,.jpeg,.png,.tif,.tiff,.jgw,.pgw,.tfw,.wld,.jpgw,.pngw,.tifw"></label><button class="btn" id="bgClear" type="button">Retirer les orthos</button></div>
+    <div class="actions"><label class="btn filebtn">Ouvrir des orthos du projet…<input type="file" id="bgFiles" multiple accept=".jpg,.jpeg,.png,.tif,.tiff,.jgw,.pgw,.tfw,.wld,.jpgw,.pngw,.tifw,.xml,.prj"></label><button class="btn" id="bgClear" type="button">Retirer les orthos</button></div>
     <p class="note">Ortho géoréférencée : image JPG / PNG avec son fichier de calage du même nom (.jgw / .pgw / .wld), en coordonnées MTM du levé. Choisissez l'image et son fichier ensemble ; plusieurs tuiles à la fois sont acceptées.</p>
     <div class="field" id="bgUrlBox" hidden><label for="bgUrl">Modèle d'URL (tuiles Web Mercator)</label><input id="bgUrl" class="mono" placeholder="https://…/{z}/{y}/{x}.jpg"></div>
     <div class="row3">
@@ -2891,19 +2891,79 @@ $('bgZone').onchange=e=>{BG.zone=+e.target.value;LS.set('vl.bgZoneSet',true);bgS
 $('bgDE').oninput=e=>{BG.dE=+e.target.value||0;bgSave();draw()};$('bgDN').oninput=e=>{BG.dN=+e.target.value||0;bgSave();draw()};
 $('bgOp').oninput=e=>{BG.op=+e.target.value;$('bgOpV').textContent=BG.op+' %';bgSave();draw()};
 $('bgClear').onclick=()=>{BG.orthos.forEach(o=>{try{o.img.close&&o.img.close()}catch(e){}});BG.orthos=[];bgSync();draw()};
-$('bgFiles').onchange=async e=>{const fs=[...e.target.files];e.target.value='';const base=n=>n.replace(/\.[^.]+$/,'').toLowerCase();
-  const wf=new Map(),imgs=[];for(const f of fs){if(/\.(jgw|pgw|tfw|wld|jpgw|pngw|tifw)$/i.test(f.name))wf.set(base(f.name),f);else if(/\.(jpe?g|png|tiff?)$/i.test(f.name))imgs.push(f)}
-  let n=0;const errs=[];
-  for(const f of imgs){const w=wf.get(base(f.name));if(!w){errs.push(`${f.name} : fichier de calage (.jgw / .pgw / .wld) manquant`);continue}
-    const v=(await w.text()).split(/\s+/).filter(Boolean).map(Number);if(v.length<6||v.some(x=>!isFinite(x))){errs.push(`${w.name} illisible`);continue}
-    let img;try{img=await createImageBitmap(f)}catch(err){try{img=await new Promise((res,rej)=>{const im=new Image();im.onload=()=>res(im);im.onerror=rej;im.src=URL.createObjectURL(f)})}catch(e2){errs.push(`${f.name} : image non lisible par ce navigateur${/tiff?$/i.test(f.name)?' (exportez en JPG + JGW)':''}`);continue}}
-    const [A,D,B,E,C,F]=v;const o={name:f.name,img,w:img.width||img.naturalWidth,h:img.height||img.naturalHeight,A,B,C,D,E,F};
-    // contrôle : l'ortho recouvre-t-elle le levé ?
-    const ex=[C,C+A*o.w].sort((p,q)=>p-q),ey=[F+E*o.h,F].sort((p,q)=>p-q);o.hit=S.rows.some(r=>!r.bad&&r.e>=ex[0]&&r.e<=ex[1]&&r.n>=ey[0]&&r.n<=ey[1]);
-    BG.orthos.push(o);n++;}
+/* Orthos du projet : image (.jpg/.png/.tif) + calage (.jgw/.pgw/.tfw/.wld, ou .aux.xml de GDAL/Pix4D, ou .prj pour le système).
+   Les fichiers peuvent être choisis ensemble ou un après l'autre ; s'ils sont dans un autre système (UTM, degrés, autre zone MTM),
+   l'ortho est ramenée en MTM (zone choisie dans le fond de plan). */
+const UTMf=(()=>{const a=6378137,f=1/298.257222101,e2=f*(2-f),ep2=e2/(1-e2),k0=0.9996,E0=500000,D=Math.PI/180;
+  const M=p=>a*((1-e2/4-3*e2*e2/64-5*e2**3/256)*p-(3*e2/8+3*e2*e2/32+45*e2**3/1024)*Math.sin(2*p)+(15*e2*e2/256+45*e2**3/1024)*Math.sin(4*p)-(35*e2**3/3072)*Math.sin(6*p));
+  const l0=z=>(-183+6*z)*D;
+  function inv(E,Nn,z){const x=E-E0,m=Nn/k0,mu=m/(a*(1-e2/4-3*e2*e2/64-5*e2**3/256)),e1=(1-Math.sqrt(1-e2))/(1+Math.sqrt(1-e2));
+    const p1=mu+(3*e1/2-27*e1**3/32)*Math.sin(2*mu)+(21*e1*e1/16-55*e1**4/32)*Math.sin(4*mu)+(151*e1**3/96)*Math.sin(6*mu)+(1097*e1**4/512)*Math.sin(8*mu);
+    const N1=a/Math.sqrt(1-e2*Math.sin(p1)**2),T1=Math.tan(p1)**2,C1=ep2*Math.cos(p1)**2,R1=a*(1-e2)/Math.pow(1-e2*Math.sin(p1)**2,1.5),Dd=x/(N1*k0);
+    const lat=p1-(N1*Math.tan(p1)/R1)*(Dd*Dd/2-(5+3*T1+10*C1-4*C1*C1-9*ep2)*Dd**4/24+(61+90*T1+298*C1+45*T1*T1-252*ep2-3*C1*C1)*Dd**6/720);
+    const lon=l0(z)+(Dd-(1+2*T1+C1)*Dd**3/6+(5-2*C1+28*T1-3*C1*C1+8*ep2+24*T1*T1)*Dd**5/120)/Math.cos(p1);return [lat/D,lon/D]}
+  return {inv}})();
+function bgCrsOf(txt){if(!txt)return null;const t=String(txt);let m;
+  if((m=/MTM[ _]?zone[ _]?(\d+)/i.exec(t)))return {k:'mtm',z:+m[1]};
+  if((m=/UTM[ _]?zone[ _]?(\d+)/i.exec(t)))return {k:'utm',z:+m[1]};
+  if((m=/EPSG["',: ]+(\d{4,5})/i.exec(t))||(m=/AUTHORITY\["EPSG","(\d+)"\]\]\s*$/i.exec(t))){const c=+m[1];
+    if(c>=2943&&c<=2952)return {k:'mtm',z:c-2942+0};if(c>=32181&&c<=32190)return {k:'mtm',z:c-32180};
+    if(c>=2955&&c<=2957)return {k:'utm',z:c-2944};if(c>=2958&&c<=2962)return {k:'utm',z:c-2941};if(c>=3154&&c<=3160)return {k:'utm',z:[7,8,9,10,14,15,16][c-3154]};if(c>=26907&&c<=26923)return {k:'utm',z:c-26900};if(c>=32607&&c<=32623)return {k:'utm',z:c-32600};if(c===4326||c===4269||c===4617)return {k:'deg'}}
+  if(/GEOGCS|GEOGCRS/i.test(t)&&!/PROJCS|PROJCRS/i.test(t))return {k:'deg'};return null}
+function bgAuxRead(txt){const g=/<GeoTransform>([^<]+)<\/GeoTransform>/i.exec(txt);const srs=(/<SRS[^>]*>([\s\S]*?)<\/SRS>/i.exec(txt)||/<WKT>([\s\S]*?)<\/WKT>/i.exec(txt)||[])[1];
+  let w=null;if(g){const v=g[1].split(/[\s,]+/).filter(Boolean).map(Number);if(v.length>=6&&v.every(isFinite)){const [c,a,b,f,d,e]=v;w=[a,d,b,e,c+a/2+b/2,f+d/2+e/2]}}
+  return {w,crs:bgCrsOf(srs&&srs.replace(/&quot;/g,'"'))}}
+function bgCovers(o){const ex=[o.C,o.C+o.A*o.w].sort((p,q)=>p-q),ey=[o.F+o.E*o.h,o.F].sort((p,q)=>p-q);return S.rows.some(r=>!r.bad&&r.e>=ex[0]&&r.e<=ex[1]&&r.n>=ey[0]&&r.n<=ey[1])}
+function bgReproj(o,toLL,zM){// ramène l'affine en MTM (zone zM) à partir des 3 coins
+  const X=(c,r)=>o.C+o.A*c+o.B*r,Y=(c,r)=>o.F+o.D*c+o.E*r;const P=[[0,0],[o.w,0],[0,o.h]].map(([c,r])=>{const [la,lo]=toLL(X(c,r),Y(c,r));return TM.fwd(la,lo,zM)});
+  const q=Object.assign({},o);q.A=(P[1][0]-P[0][0])/o.w;q.D=(P[1][1]-P[0][1])/o.w;q.B=(P[2][0]-P[0][0])/o.h;q.E=(P[2][1]-P[0][1])/o.h;q.C=P[0][0];q.F=P[0][1];return q}
+function bgFit(o,crs){const zM=+BG.zone||8;
+  const tries=[];if(crs){if(crs.k==='mtm')tries.push(crs.z===zM?['tel quel',null]:[`MTM ${crs.z} → MTM ${zM}`,(x,y)=>TM.inv(x,y,crs.z)]);else if(crs.k==='utm')tries.push([`UTM ${crs.z} → MTM ${zM}`,(x,y)=>UTMf.inv(x,y,crs.z)]);else tries.push([`degrés → MTM ${zM}`,(x,y)=>[y,x]])}
+  tries.push(['tel quel',null]);if(Math.abs(o.C)<=180&&Math.abs(o.F)<=90)tries.push([`degrés → MTM ${zM}`,(x,y)=>[y,x]]);
+  for(const z of [17,18,19,20,21])tries.push([`UTM ${z} → MTM ${zM}`,(x,y)=>UTMf.inv(x,y,z)]);for(const z of [3,4,5,6,7,8,9,10])if(z!==zM)tries.push([`MTM ${z} → MTM ${zM}`,(x,y)=>TM.inv(x,y,z)]);
+  if(!S.rows.length){const [lab,f]=tries[0];return {o:f?bgReproj(o,f,zM):o,how:lab,hit:false}}
+  for(const [lab,f] of tries){let q;try{q=f?bgReproj(o,f,zM):o}catch(e){continue}if([q.A,q.B,q.C,q.D,q.E,q.F].every(isFinite)&&bgCovers(q))return {o:q,how:lab,hit:true}}
+  const [lab,f]=tries[0];return {o:f?bgReproj(o,f,zM):o,how:lab,hit:false}}
+BG.pend={img:new Map(),wf:new Map(),aux:new Map(),prj:new Map()};
+/* Dimensions lues dans l'en-tête (JPEG SOF / PNG IHDR) sans décoder l'image */
+async function bgDims(f){try{const b=new Uint8Array(await f.slice(0,Math.min(f.size,1<<20)).arrayBuffer());
+  if(b[0]===0x89&&b[1]===0x50)return {w:(b[16]<<24|b[17]<<16|b[18]<<8|b[19])>>>0,h:(b[20]<<24|b[21]<<16|b[22]<<8|b[23])>>>0};
+  if(b[0]===0xFF&&b[1]===0xD8){let i=2;while(i+9<b.length){if(b[i]!==0xFF){i++;continue}const m=b[i+1];if(m===0xD8||m===0x01||(m>=0xD0&&m<=0xD7)){i+=2;continue}const L=b[i+2]<<8|b[i+3];
+    if((m>=0xC0&&m<=0xC3)||(m>=0xC5&&m<=0xC7)||(m>=0xC9&&m<=0xCB)||(m>=0xCD&&m<=0xCF))return {h:b[i+5]<<8|b[i+6],w:b[i+7]<<8|b[i+8]};i+=2+L}}}catch(e){}return null}
+/* Décodage : les très grandes orthos (drone) sont réduites à 8192 px de côté (≈ 40 Mpx) pour rester lisibles par le navigateur */
+async function bgDecode(f){const d=await bgDims(f);const MAXS=8192,MAXP=40e6;let sc=1;
+  if(d&&d.w&&d.h)sc=Math.min(1,MAXS/Math.max(d.w,d.h),Math.sqrt(MAXP/(d.w*d.h)));
+  const tries=sc<1?[sc,sc/2]:[1,.5,.25];let last=null;
+  for(const k of tries){try{const img=k<1&&d?await createImageBitmap(f,{resizeWidth:Math.max(1,Math.round(d.w*k)),resizeHeight:Math.max(1,Math.round(d.h*k)),resizeQuality:'medium'}):await createImageBitmap(f);
+      return {img,w:img.width,h:img.height,W:d?d.w:img.width,H:d?d.h:img.height}}catch(e){last=e;if(!d)break}}
+  if(!d||sc===1){try{const im=await new Promise((res,rej)=>{const x=new Image();x.onload=()=>res(x);x.onerror=rej;x.src=URL.createObjectURL(f)});return {img:im,w:im.naturalWidth,h:im.naturalHeight,W:im.naturalWidth,H:im.naturalHeight}}catch(e){}}
+  throw last||new Error('illisible')}
+$('bgFiles').onchange=async e=>{const fs=[...e.target.files];e.target.value='';
+  const key=n=>n.toLowerCase().replace(/\.aux\.xml$/,'').replace(/\.(jgw|pgw|tfw|wld|jpgw|pngw|tifw|prj|xml)$/,'').replace(/\.(jpe?g|png|tiff?)$/,'');
+  const P=BG.pend;const ign=[];
+  for(const f of fs){const n=f.name.toLowerCase();
+    if(/\.aux\.xml$/.test(n))P.aux.set(key(n),f);else if(/\.(jgw|pgw|tfw|wld|jpgw|pngw|tifw)$/.test(n))P.wf.set(key(n),f);else if(/\.prj$/.test(n))P.prj.set(key(n),f);else if(/\.(jpe?g|png|tiff?)$/.test(n))P.img.set(key(n),f);else ign.push(f.name)}
+  let n=0;const errs=[],notes=[];
+  for(const [k,f] of [...P.img]){const wfF=P.wf.get(k),auxF=P.aux.get(k),prjF=P.prj.get(k);
+    let w=null,crs=null,src='';
+    if(auxF){try{const a=bgAuxRead(await auxF.text());crs=a.crs;if(a.w){w=a.w;src=auxF.name}}catch(er){}}
+    if(wfF){const v=(await wfF.text()).replace(/,/g,'.').split(/\s+/).filter(Boolean).map(Number);if(v.length>=6&&v.slice(0,6).every(isFinite)){w=v.slice(0,6);src=wfF.name}else errs.push(`${wfF.name} illisible (6 nombres attendus)`)}
+    if(prjF&&!crs){try{crs=bgCrsOf(await prjF.text())}catch(er){}}
+    if(!w){continue}// attend son calage
+    let dec;try{dec=await bgDecode(f)}catch(err){const dm=await bgDims(f);errs.push(`${f.name} : image non lisible par ce navigateur${/tiff?$/i.test(f.name)?' (exportez en JPG + JGW)':dm?` (${dm.w} × ${dm.h} px : trop grande, exportez une version plus légère)`:''}`);P.img.delete(k);continue}
+    let [A,D,B,E,C,F]=w;const fx=dec.W/dec.w,fy=dec.H/dec.h;
+    if(fx!==1||fy!==1){const C0=C-A/2-B/2,F0=F-D/2-E/2;A*=fx;D*=fx;B*=fy;E*=fy;C=C0+A/2+B/2;F=F0+D/2+E/2;notes.push(`${f.name} : ${dec.W} × ${dec.H} px réduite à ${dec.w} × ${dec.h} px pour l'affichage`)}
+    let o={name:f.name,img:dec.img,w:dec.w,h:dec.h,A,B,C,D,E,F};
+    const fit=bgFit(o,crs);o=fit.o;o.hit=fit.hit;if(fit.how!=='tel quel')notes.push(`${f.name} : calage converti ${fit.how}`);
+    BG.orthos.push(o);n++;P.img.delete(k);P.wf.delete(k);P.aux.delete(k);P.prj.delete(k);}
+  const wait=[...P.img.values()].map(f=>f.name),orphan=[...P.wf.values(),...[...P.aux.values()].filter(()=>!n)].map(f=>f.name);
   if(n){BG.src='ortho';bgSave();}bgSync();draw();
   const miss=BG.orthos.filter(o=>!o.hit).length;
-  toast(`${n} ortho(s) ouverte(s)${miss?` · ${miss} hors de l'étendue du levé (coordonnées ou zone différentes ?)`:''}${errs.length?' · '+errs.join(' ; '):''}`)};
+  const msg=[n?`${n} ortho(s) ouverte(s)`:'',notes.length?notes.join(' ; '):'',miss&&S.rows.length?`${miss} ortho(s) hors de l'étendue du levé (vérifiez la zone MTM ou le système de l'ortho)`:'',
+    wait.length?`${wait.join(', ')} : fichier de calage pas encore choisi — ouvrez aussi le .jgw (ou le .aux.xml) du même nom`:'',
+    !n&&!wait.length&&orphan.length?`${orphan.join(', ')} : choisissez maintenant l'image (.jpg) du même nom`:'',errs.join(' ; '),ign.length?`ignoré(s) : ${ign.join(', ')}`:''].filter(Boolean).join(' · ');
+  toast(msg||'Aucun fichier reconnu : choisissez l\'image (.jpg/.png) et son calage (.jgw/.pgw/.wld ou .aux.xml).');
+  const st=$('bgStatus');if(st&&msg)st.textContent=msg};
 bgSync();
 
 /* ---------- Codes hors standard → liste ArpentNord (bouton CODES) ----------
